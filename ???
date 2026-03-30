@@ -1,0 +1,120 @@
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/LonerYT/ZalupaLib/main/Library.lua"))()
+
+local RS = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+local rocketHit = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("RocketHit")
+local fireRocket = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("FireRocket")
+local rocketModel = RS:WaitForChild("RocketSystem"):WaitForChild("Rockets"):WaitForChild("RPG Rocket")
+
+local attackPlayers = false
+local attackShields = false
+local infiniteAmmo = false
+
+local rocketSettings = {
+    expShake = { fadeInTime = 0.05, magnitude = 3, rotInfluence = vector.create(0.4, 0, 0.4), fadeOutTime = 0.5, roughness = 3, posInfluence = vector.create(1, 1, 0) },
+    gravity = vector.create(0, -20, 0),
+    HelicopterDamage = 450, FireRate = 15, VehicleDamage = 350,
+    ExpName = "RPG", RocketAmount = 1, ExpRadius = 12,
+    BoatDamage = 300, TankDamage = 300, Acceleration = 8,
+    ShieldDamage = 9999, Distance = 4000, PlaneDamage = 500,
+    GunshipDamage = 170, velocity = 200, ExplosionDamage = 120
+}
+
+local Window = Library:CreateWindow({Title = "RPG Script", Subtitle = "v1.0", Theme = "Blue"})
+local Tab = Window:CreateTab({Name = "Main", Icon = ""})
+
+Tab:CreateSection("RPG")
+
+Tab:CreateToggle({Name = "Infinite Ammo", Default = false, Callback = function(v)
+    infiniteAmmo = v
+end})
+
+Tab:CreateToggle({Name = "Attack Players", Default = false, Callback = function(v)
+    attackPlayers = v
+end})
+
+Tab:CreateToggle({Name = "Attack Shields", Default = false, Callback = function(v)
+    attackShields = v
+end})
+
+-- Infinite Ammo
+task.spawn(function()
+    while task.wait() do
+        if infiniteAmmo then
+            for _, v in pairs(getgc(true)) do
+                if type(v) == "table" and rawget(v, "Mode") == "RPG" and rawget(v, "Ammo") ~= nil then
+                    rawset(v, "Ammo", math.huge)
+                    rawset(v, "Bullets", math.huge)
+                    rawset(v, "FireRate", 1)
+                end
+            end
+        end
+    end
+end)
+
+local function getShields()
+    local shields = {}
+    local tycoons = workspace:WaitForChild("Tycoon"):WaitForChild("Tycoons"):GetChildren()
+    for _, tycoon in ipairs(tycoons) do
+        local ok, shieldFolder = pcall(function()
+            return tycoon.PurchasedObjects["Base Shield"].Shield
+        end)
+        if ok and shieldFolder then
+            for _, shield in ipairs(shieldFolder:GetChildren()) do
+                if shield.Name ~= "Health" then
+                    table.insert(shields, shield)
+                end
+            end
+        end
+    end
+    return shields
+end
+
+local function fireAtPart(part, child)
+    local pos = vector.create(part.Position.X, part.Position.Y, part.Position.Z)
+    fireRocket:InvokeServer({
+        Direction = vector.create(0, -1, 0),
+        Settings = rocketSettings,
+        Origin = pos,
+        RocketModel = rocketModel,
+        Vehicle = child,
+        PlrFired = lp,
+        Weapon = child
+    })
+    rocketHit:FireServer({
+        Normal = Vector3.yAxis,
+        Player = lp,
+        Label = lp.Name .. "Rocket1",
+        HitPart = part,
+        Vehicle = child,
+        Position = pos,
+        Weapon = child
+    })
+end
+
+local character = lp.Character or lp.CharacterAdded:Wait()
+
+character.ChildAdded:Connect(function(child)
+    if child.Name == "RPG" then
+        Library:Notify({Title = "RPG Script", Text = "RPG обнаружен!", Duration = 3})
+        while child.Parent == character do
+            if attackShields then
+                for _, shield in ipairs(getShields()) do
+                    task.spawn(fireAtPart, shield, child)
+                end
+            end
+
+            if attackPlayers then
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player == lp or not player.Character then continue end
+                    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                    if not hrp then continue end
+                    task.spawn(fireAtPart, hrp, child)
+                end
+            end
+
+            task.wait(0.1)
+        end
+    end
+end)
