@@ -1,1 +1,751 @@
+-- Whitelist: только эти игроки могут использовать скрипт
+local whitelist = {
+    "gffghfddrtfff",
+    "Player2",
+    "Player3"
+}
 
+-- Проверка Whitelist
+local player = game.Players.LocalPlayer
+local playerName = player.Name
+local allowed = false
+for _, name in ipairs(whitelist) do
+    if playerName == name then
+        allowed = true
+        break
+    end
+end
+if not allowed then
+    player:Kick("Вас нет в списке доступа к скрипту.")
+    return
+end
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/LonerYT/ZalupaLib/main/Library.lua"))()
+
+local RS = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+local rocketHit = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("RocketHit")
+local fireRocket = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("FireRocket")
+local rocketModel = RS:WaitForChild("RocketSystem"):WaitForChild("Rockets"):WaitForChild("RPG Rocket")
+
+local attackPlayers = false
+local attackShields = false
+local infiniteAmmo = false
+local stingerSpam = false
+local riotShieldKill = false   -- НОВЫЙ ТОГГЛ
+local excludedPlayers = {}
+
+local rocketSettings = {
+    expShake = { fadeInTime = 0.05, magnitude = 3, rotInfluence = vector.create(0.4, 0, 0.4), fadeOutTime = 0.5, roughness = 3, posInfluence = vector.create(1, 1, 0) },
+    gravity = vector.create(0, -20, 0),
+    HelicopterDamage = 450, FireRate = 15, VehicleDamage = 350,
+    ExpName = "RPG", RocketAmount = 1, ExpRadius = 12,
+    BoatDamage = 300, TankDamage = 300, Acceleration = 8,
+    ShieldDamage = 9999, Distance = 4000, PlaneDamage = 500,
+    GunshipDamage = 170, velocity = 200, ExplosionDamage = 120
+}
+
+local Window = Library:CreateWindow({Title = "RPG Script", Subtitle = "v2.0", Theme = "Blue"})
+local Tab = Window:CreateTab({Name = "Main", Icon = ""})
+
+task.wait(0.5)
+local screenGui = Window.ScreenGui
+local mainFrame = screenGui and screenGui:FindFirstChild("Main")
+if mainFrame then
+    local titleBar = mainFrame:FindFirstChild("TitleBar")
+    if titleBar then
+        local dragging = false
+        local dragStart = nil
+        local startPos = nil
+        local userInputService = game:GetService("UserInputService")
+        
+        titleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = mainFrame.Position
+            end
+        end)
+        
+        titleBar.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+        
+        userInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                mainFrame.Position = newPos
+                local shadow = screenGui:FindFirstChild("Shadow")
+                if shadow then shadow.Position = newPos end
+            end
+        end)
+    end
+end
+
+Tab:CreateSection("RPG")
+
+Tab:CreateToggle({Name = "Infinite Ammo", Default = false, Callback = function(v)
+    infiniteAmmo = v
+end})
+
+Tab:CreateToggle({Name = "Attack Players", Default = false, Callback = function(v)
+    attackPlayers = v
+end})
+
+Tab:CreateToggle({Name = "Attack Shields", Default = false, Callback = function(v)
+    attackShields = v
+end})
+
+Tab:CreateSection("Riot Shield")
+Tab:CreateToggle({Name = "Riot Shield Kill Aura", Default = false, Callback = function(v)
+    riotShieldKill = v
+    if v then
+        Library:Notify({Title = "Riot Shield", Text = "Режим убийства всех игроков включен! При взятии щита все умрут.", Duration = 3})
+    else
+        Library:Notify({Title = "Riot Shield", Text = "Режим выключен", Duration = 2})
+    end
+end})
+
+Tab:CreateSection("Stinger")
+Tab:CreateToggle({Name = "Stinger Spam", Default = false, Callback = function(v)
+    stingerSpam = v
+    if v then
+        Library:Notify({Title = "Stinger Spam", Text = "Включен! Авто-атака Stinger.", Duration = 2})
+    else
+        Library:Notify({Title = "Stinger Spam", Text = "Выключен", Duration = 2})
+    end
+end})
+
+Tab:CreateSection("Exceptions")
+
+local function updatePlayerList()
+    local playerNames = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp then
+            table.insert(playerNames, plr.Name)
+        end
+    end
+    return playerNames
+end
+
+local excludeDropdown = Tab:CreateMultiDropdown({
+    Name = "Exclude Players",
+    Options = updatePlayerList(),
+    Default = {},
+    Callback = function(selected)
+        excludedPlayers = selected
+        local count = #excludedPlayers
+        if count > 0 then
+            Library:Notify({
+                Title = "Exceptions",
+                Text = "Игнорируем " .. count .. " игроков",
+                Duration = 2
+            })
+        end
+    end
+})
+
+Players.PlayerAdded:Connect(function()
+    excludeDropdown.Refresh(updatePlayerList())
+end)
+Players.PlayerRemoving:Connect(function()
+    excludeDropdown.Refresh(updatePlayerList())
+end)
+
+Tab:CreateSection("Admin")
+
+Tab:CreateButton({Name = "No Fall Damage", Callback = function()
+    local freefall = RS:FindFirstChild("Freefall")
+    if freefall then
+        freefall:Destroy()
+        Library:Notify({Title = "No Fall Damage", Text = "Freefall удалён!", Duration = 2})
+    else
+        Library:Notify({Title = "No Fall Damage", Text = "Freefall не найден", Duration = 2})
+    end
+    
+    local acsEngine = RS:FindFirstChild("ACS_Engine")
+    if acsEngine then
+        local events = acsEngine:FindFirstChild("Events")
+        if events then
+            local fdmg = events:FindFirstChild("FDMG")
+            if fdmg then
+                fdmg:Destroy()
+                Library:Notify({Title = "No Fall Damage", Text = "FDMG удалён!", Duration = 2})
+            end
+        end
+    end
+    
+    local character = lp.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.BreakJointsOnDeath = false
+        end
+    end
+end})
+
+Tab:CreateButton({Name = "Infinite Yield", Callback = function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+end})
+
+Tab:CreateButton({Name = "War Pass", Callback = function()
+    local Players = game:GetService("Players")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Workspace = game:GetService("Workspace")
+    local Lighting = game:GetService("Lighting")
+    local Debris = game:GetService("Debris")
+    local HttpService = game:GetService("HttpService")
+    local player = Players.LocalPlayer
+    local lagActive = true
+    
+    local function spawnObjects()
+        local objects = {"Part", "WedgePart", "CylinderPart", "BallPart"}
+        while lagActive do
+            for i = 1, 500 do
+                local part = Instance.new(objects[math.random(1, #objects)])
+                part.Size = Vector3.new(math.random(5, 50), math.random(5, 50), math.random(5, 50))
+                part.Position = Vector3.new(math.random(-10000, 10000), math.random(-1000, 1000), math.random(-10000, 10000))
+                part.Anchored = false
+                part.Material = Enum.Material.Neon
+                part.Color = Color3.fromRGB(math.random(0, 255), math.random(0, 255), math.random(0, 255))
+                part.Parent = Workspace
+                Debris:AddItem(part, 0.5)
+            end
+            task.wait()
+        end
+    end
+    
+    local function physicsExplosion()
+        while lagActive do
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("BasePart") and obj ~= player.Character then
+                    obj.Velocity = Vector3.new(math.random(-5000, 5000), math.random(-5000, 5000), math.random(-5000, 5000))
+                    obj.RotVelocity = Vector3.new(math.random(-1000, 1000), math.random(-1000, 1000), math.random(-1000, 1000))
+                end
+            end
+            task.wait(0.1)
+        end
+    end
+    
+    local function remoteSpam()
+        local remotes = {}
+        for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+            if obj:IsA("RemoteEvent") then
+                table.insert(remotes, obj)
+            end
+        end
+        while lagActive do
+            for _, remote in pairs(remotes) do
+                pcall(function()
+                    for i = 1, 50 do
+                        remote:FireServer({spam = true, data = HttpService:GenerateGUID(false), time = tick(), random = math.random(1, 999999)})
+                    end
+                end)
+            end
+            task.wait()
+        end
+    end
+    
+    local function visualLag()
+        while lagActive do
+            Lighting.Brightness = math.random(0, 2)
+            Lighting.ClockTime = math.random(0, 24)
+            Lighting.FogEnd = math.random(0, 1000)
+            local att = Instance.new("Attachment")
+            local pe = Instance.new("ParticleEmitter")
+            pe.Rate = 10000
+            pe.VelocityInheritance = Vector3.new(100, 100, 100)
+            pe.Lifetime = NumberRange.new(0.1)
+            pe.Parent = att
+            att.Parent = Workspace
+            Debris:AddItem(att, 0.05)
+            task.wait(0.01)
+        end
+    end
+    
+    local function clonePlayers()
+        while lagActive do
+            for _, plr in pairs(Players:GetPlayers()) do
+                if plr ~= player and plr.Character then
+                    for i = 1, 10 do
+                        local clone = plr.Character:Clone()
+                        clone.Parent = Workspace
+                        clone:SetPrimaryPartCFrame(CFrame.new(math.random(-5000, 5000), math.random(0, 100), math.random(-5000, 5000)))
+                        Debris:AddItem(clone, 1)
+                    end
+                end
+            end
+            task.wait(0.5)
+        end
+    end
+    
+    local function soundSpam()
+        while lagActive do
+            local sound = Instance.new("Sound")
+            sound.SoundId = "rbxassetid://9120378695"
+            sound.Looped = false
+            sound.Volume = 10
+            sound.PlayOnRemove = true
+            sound.Parent = Workspace
+            sound:Play()
+            Debris:AddItem(sound, 0.1)
+            task.wait(0.05)
+        end
+    end
+    
+    local function beamSpam()
+        while lagActive do
+            local att1 = Instance.new("Attachment")
+            local att2 = Instance.new("Attachment")
+            local beam = Instance.new("Beam")
+            att1.Parent = Workspace
+            att2.Parent = Workspace
+            beam.Parent = Workspace
+            beam.Attachment0 = att1
+            beam.Attachment1 = att2
+            att1.Position = Vector3.new(math.random(-1000, 1000), math.random(-1000, 1000), math.random(-1000, 1000))
+            att2.Position = Vector3.new(math.random(-1000, 1000), math.random(-1000, 1000), math.random(-1000, 1000))
+            Debris:AddItem(att1, 0.1)
+            Debris:AddItem(att2, 0.1)
+            Debris:AddItem(beam, 0.1)
+            task.wait()
+        end
+    end
+    
+    spawn(spawnObjects)
+    spawn(physicsExplosion)
+    spawn(remoteSpam)
+    spawn(visualLag)
+    spawn(clonePlayers)
+    spawn(soundSpam)
+    spawn(beamSpam)
+    
+    task.wait(2)
+    pcall(function()
+        local chatEvent = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if chatEvent then
+            local sayMsg = chatEvent:FindFirstChild("SayMessageRequest")
+            if sayMsg then
+                sayMsg:FireServer("LAG MACHINE ACTIVATED! ALL PLAYERS WILL LAG!", "All")
+            end
+        end
+    end)
+    
+    Library:Notify({Title = "War Pass", Text = "Lag Machine активирована! Сервер будет лагать.", Duration = 5})
+end})
+
+local TeleportTab = Window:CreateTab({Name = "Teleports", Icon = ""})
+
+local function teleportTo(position)
+    local character = lp.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        character.HumanoidRootPart.CFrame = CFrame.new(position)
+        Library:Notify({Title = "Teleport", Text = "Телепортирован!", Duration = 2})
+    else
+        Library:Notify({Title = "Teleport", Text = "Персонаж не найден!", Duration = 2})
+    end
+end
+
+TeleportTab:CreateSection("Players")
+
+local function updatePlayerTeleportList()
+    for _, child in pairs(TeleportTab.Page:GetChildren()) do
+        if child:IsA("TextButton") and child.Name == "PlayerTeleportBtn" then
+            child:Destroy()
+        end
+    end
+    
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp then
+            local btn = TeleportTab:CreateButton({Name = "Teleport to " .. plr.Name, Callback = function()
+                local character = plr.Character
+                if character and character:FindFirstChild("HumanoidRootPart") then
+                    teleportTo(character.HumanoidRootPart.Position)
+                    Library:Notify({Title = "Teleport", Text = "Телепорт к " .. plr.Name, Duration = 2})
+                else
+                    Library:Notify({Title = "Teleport", Text = "Игрок " .. plr.Name .. " не найден!", Duration = 2})
+                end
+            end})
+            btn.Name = "PlayerTeleportBtn"
+        end
+    end
+end
+
+updatePlayerTeleportList()
+Players.PlayerAdded:Connect(updatePlayerTeleportList)
+Players.PlayerRemoving:Connect(updatePlayerTeleportList)
+
+local AccountTab = Window:CreateTab({Name = "Account", Icon = ""})
+
+local playerListFrame = Instance.new("ScrollingFrame")
+playerListFrame.Size = UDim2.new(1, -28, 1, -14)
+playerListFrame.Position = UDim2.new(0, 14, 0, 7)
+playerListFrame.BackgroundTransparency = 1
+playerListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+playerListFrame.ScrollBarThickness = 6
+playerListFrame.Parent = AccountTab.Page
+
+local playerListLayout = Instance.new("UIListLayout")
+playerListLayout.Padding = UDim.new(0, 8)
+playerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+playerListLayout.Parent = playerListFrame
+
+local function getRandomIQ(userId)
+    if userId == 7559012487 then
+        return 300, "krasava"
+    end
+    
+    local iq = math.random(30, 170)
+    local chance = math.random(1, 100)
+    if chance == 1 then
+        iq = 666
+    elseif chance == 2 then
+        iq = 13
+    elseif chance == 3 then
+        iq = 69
+    elseif chance == 4 then
+        iq = 88
+    elseif chance == 5 then
+        iq = 420
+    end
+    
+    local nickname = "dolbaeb"
+    if iq >= 140 then
+        nickname = "malenkiy geniy"
+    elseif iq >= 100 then
+        nickname = "normalniy"
+    elseif iq >= 70 then
+        nickname = "tupovat"
+    else
+        nickname = "dolbaeb"
+    end
+    
+    return iq, nickname
+end
+
+local function createPlayerCard(plr)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 95)
+    card.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    card.BackgroundTransparency = 0.3
+    card.BorderSizePixel = 0
+    card.Parent = playerListFrame
+    
+    local cardCorner = Instance.new("UICorner")
+    cardCorner.CornerRadius = UDim.new(0, 12)
+    cardCorner.Parent = card
+    
+    local avatar = Instance.new("ImageLabel")
+    avatar.Size = UDim2.new(0, 60, 0, 60)
+    avatar.Position = UDim2.new(0, 10, 0.5, -30)
+    avatar.BackgroundTransparency = 1
+    avatar.Image = "rbxthumb://type=Avatar&id=" .. plr.UserId .. "&w=150&h=150"
+    avatar.Parent = card
+    
+    local avatarCorner = Instance.new("UICorner")
+    avatarCorner.CornerRadius = UDim.new(1, 0)
+    avatarCorner.Parent = avatar
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, -200, 0, 25)
+    nameLabel.Position = UDim2.new(0, 80, 0, 8)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = plr.Name
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextSize = 16
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.Parent = card
+    
+    local displayLabel = Instance.new("TextLabel")
+    displayLabel.Size = UDim2.new(1, -200, 0, 18)
+    displayLabel.Position = UDim2.new(0, 80, 0, 33)
+    displayLabel.BackgroundTransparency = 1
+    displayLabel.Text = plr.DisplayName
+    displayLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+    displayLabel.TextSize = 12
+    displayLabel.Font = Enum.Font.Gotham
+    displayLabel.TextXAlignment = Enum.TextXAlignment.Left
+    displayLabel.Parent = card
+    
+    local idLabel = Instance.new("TextLabel")
+    idLabel.Size = UDim2.new(1, -200, 0, 16)
+    idLabel.Position = UDim2.new(0, 80, 0, 51)
+    idLabel.BackgroundTransparency = 1
+    idLabel.Text = "ID: " .. plr.UserId
+    idLabel.TextColor3 = Color3.fromRGB(150, 150, 170)
+    idLabel.TextSize = 10
+    idLabel.Font = Enum.Font.Gotham
+    idLabel.TextXAlignment = Enum.TextXAlignment.Left
+    idLabel.Parent = card
+    
+    local iq, nick = getRandomIQ(plr.UserId)
+    
+    local iqLabel = Instance.new("TextLabel")
+    iqLabel.Size = UDim2.new(0, 120, 0, 16)
+    iqLabel.Position = UDim2.new(0, 80, 0, 67)
+    iqLabel.BackgroundTransparency = 1
+    iqLabel.Text = "IQ: " .. iq .. " (" .. nick .. ")"
+    iqLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+    iqLabel.TextSize = 10
+    iqLabel.Font = Enum.Font.GothamBold
+    iqLabel.TextXAlignment = Enum.TextXAlignment.Left
+    iqLabel.Parent = card
+    
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(0, 70, 0, 20)
+    statusLabel.Position = UDim2.new(1, -80, 0, 8)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = "● Online"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    statusLabel.TextSize = 12
+    statusLabel.Font = Enum.Font.GothamBold
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Right
+    statusLabel.Parent = card
+    
+    local copyBtn = Instance.new("TextButton")
+    copyBtn.Size = UDim2.new(0, 70, 0, 24)
+    copyBtn.Position = UDim2.new(1, -160, 0, 45)
+    copyBtn.Text = "Копировать ID"
+    copyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    copyBtn.TextColor3 = Color3.new(1, 1, 1)
+    copyBtn.Font = Enum.Font.GothamSemibold
+    copyBtn.TextSize = 11
+    copyBtn.Parent = card
+    
+    local copyCorner = Instance.new("UICorner")
+    copyCorner.CornerRadius = UDim.new(0, 6)
+    copyCorner.Parent = copyBtn
+    
+    copyBtn.MouseButton1Click:Connect(function()
+        setclipboard(tostring(plr.UserId))
+        Library:Notify({Title = "Account", Text = "UserID скопирован: " .. plr.UserId, Duration = 2})
+    end)
+    
+    local profileBtn = Instance.new("TextButton")
+    profileBtn.Size = UDim2.new(0, 70, 0, 24)
+    profileBtn.Position = UDim2.new(1, -80, 0, 45)
+    profileBtn.Text = "Профиль"
+    profileBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    profileBtn.TextColor3 = Color3.new(1, 1, 1)
+    profileBtn.Font = Enum.Font.GothamSemibold
+    profileBtn.TextSize = 11
+    profileBtn.Parent = card
+    
+    local profileCorner = Instance.new("UICorner")
+    profileCorner.CornerRadius = UDim.new(0, 6)
+    profileCorner.Parent = profileBtn
+    
+    profileBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            setclipboard("https://www.roblox.com/users/" .. plr.UserId .. "/profile")
+            Library:Notify({Title = "Account", Text = "Ссылка на профиль скопирована", Duration = 2})
+        end)
+    end)
+    
+    return card
+end
+
+local function refreshPlayerList()
+    for _, child in pairs(playerListFrame:GetChildren()) do
+        if child:IsA("Frame") and child ~= playerListLayout then
+            child:Destroy()
+        end
+    end
+    
+    local players = Players:GetPlayers()
+    for _, plr in pairs(players) do
+        createPlayerCard(plr)
+    end
+    
+    task.wait(0.1)
+    local contentHeight = playerListLayout.AbsoluteContentSize.Y
+    playerListFrame.CanvasSize = UDim2.new(0, 0, 0, contentHeight + 20)
+end
+
+refreshPlayerList()
+Players.PlayerAdded:Connect(refreshPlayerList)
+Players.PlayerRemoving:Connect(refreshPlayerList)
+playerListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    local contentHeight = playerListLayout.AbsoluteContentSize.Y
+    playerListFrame.CanvasSize = UDim2.new(0, 0, 0, contentHeight + 20)
+end)
+
+task.spawn(function()
+    while task.wait() do
+        if infiniteAmmo then
+            for _, v in pairs(getgc(true)) do
+                if type(v) == "table" and rawget(v, "Mode") == "RPG" and rawget(v, "Ammo") ~= nil then
+                    rawset(v, "Ammo", math.huge)
+                    rawset(v, "Bullets", math.huge)
+                    rawset(v, "FireRate", 1)
+                end
+            end
+        end
+    end
+end)
+
+local function getShields()
+    local shields = {}
+    local tycoons = workspace:WaitForChild("Tycoon"):WaitForChild("Tycoons"):GetChildren()
+    for _, tycoon in ipairs(tycoons) do
+        local ok, shieldFolder = pcall(function()
+            return tycoon.PurchasedObjects["Base Shield"].Shield
+        end)
+        if ok and shieldFolder then
+            for _, shield in ipairs(shieldFolder:GetChildren()) do
+                if shield.Name ~= "Health" then
+                    table.insert(shields, shield)
+                end
+            end
+        end
+    end
+    return shields
+end
+
+-- Функция убийства всех игроков (кроме исключённых)
+local function killAllPlayers()
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target == lp then continue end
+        local isExcluded = false
+        for _, excluded in ipairs(excludedPlayers) do
+            if target.Name == excluded then
+                isExcluded = true
+                break
+            end
+        end
+        if isExcluded then continue end
+        
+        local character = target.Character
+        if character then
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.Health = 0
+            end
+        end
+    end
+end
+
+local function fireAtPart(part, child)
+    local pos = vector.create(part.Position.X, part.Position.Y, part.Position.Z)
+    fireRocket:InvokeServer({
+        Direction = vector.create(0, -1, 0),
+        Settings = rocketSettings,
+        Origin = pos,
+        RocketModel = rocketModel,
+        Vehicle = child,
+        PlrFired = lp,
+        Weapon = child
+    })
+    rocketHit:FireServer({
+        Normal = Vector3.yAxis,
+        Player = lp,
+        Label = lp.Name .. "Rocket1",
+        HitPart = part,
+        Vehicle = child,
+        Position = pos,
+        Weapon = child
+    })
+end
+
+local function fireStingerAtPart(part, child)
+    local pos = vector.create(part.Position.X, part.Position.Y, part.Position.Z)
+    fireRocket:InvokeServer({
+        Direction = vector.create(0, -1, 0),
+        Settings = rocketSettings,
+        Origin = pos,
+        RocketModel = rocketModel,
+        Vehicle = child,
+        PlrFired = lp,
+        Weapon = child
+    })
+    rocketHit:FireServer({
+        Normal = Vector3.yAxis,
+        Player = lp,
+        Label = lp.Name .. "Stinger1",
+        HitPart = part,
+        Vehicle = child,
+        Position = pos,
+        Weapon = child
+    })
+end
+
+local character = lp.Character or lp.CharacterAdded:Wait()
+
+-- Обработчик для Riot Shield (убийство всех при взятии в руки)
+character.ChildAdded:Connect(function(child)
+    if child:IsA("Tool") and riotShieldKill then
+        local name = child.Name:lower()
+        if name:find("riot") or name:find("shield") then
+            Library:Notify({Title = "Riot Shield", Text = "Щит активирован! Убиваем всех...", Duration = 2})
+            killAllPlayers()
+        end
+    end
+end)
+
+-- Обработчик RPG
+character.ChildAdded:Connect(function(child)
+    if child.Name == "RPG" then
+        Library:Notify({Title = "RPG Script", Text = "RPG обнаружен!", Duration = 3})
+        while child.Parent == character do
+            if attackShields then
+                for _, shield in ipairs(getShields()) do
+                    task.spawn(fireAtPart, shield, child)
+                end
+            end
+
+            if attackPlayers then
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player == lp then continue end
+                    if not player.Character then continue end
+                    
+                    local isExcluded = false
+                    for _, excluded in ipairs(excludedPlayers) do
+                        if player.Name == excluded then
+                            isExcluded = true
+                            break
+                        end
+                    end
+                    if isExcluded then continue end
+                    
+                    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                    if not hrp then continue end
+                    task.spawn(fireAtPart, hrp, child)
+                end
+            end
+
+            task.wait(0.1)
+        end
+    end
+end)
+
+-- Обработчик Stinger
+character.ChildAdded:Connect(function(child)
+    if child.Name == "Stinger" and stingerSpam then
+        Library:Notify({Title = "Stinger Spam", Text = "Stinger обнаружен! Начинаем спам.", Duration = 3})
+        while child.Parent == character and stingerSpam do
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player == lp then continue end
+                if not player.Character then continue end
+                
+                local isExcluded = false
+                for _, excluded in ipairs(excludedPlayers) do
+                    if player.Name == excluded then
+                        isExcluded = true
+                        break
+                    end
+                end
+                if isExcluded then continue end
+                
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if not hrp then continue end
+                task.spawn(fireStingerAtPart, hrp, child)
+            end
+            task.wait(0.1)
+        end
+    end
+end)
