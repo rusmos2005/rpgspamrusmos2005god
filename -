@@ -1,6 +1,6 @@
 -- Whitelist: только эти игроки могут использовать скрипт
 local whitelist = {
-    "Gothbreach",
+    "VCTjebBO",
     "Player2",
     "Player3"
 }
