@@ -33,7 +33,7 @@ local attackPlayers = false
 local attackShields = false
 local infiniteAmmo = false
 local stingerSpam = false
-local riotShieldKill = false   -- НОВЫЙ ТОГГЛ
+local javelinSpam = false   -- НОВЫЙ ТОГГЛ
 local excludedPlayers = {}
 
 local rocketSettings = {
@@ -100,16 +100,6 @@ Tab:CreateToggle({Name = "Attack Shields", Default = false, Callback = function(
     attackShields = v
 end})
 
-Tab:CreateSection("Riot Shield")
-Tab:CreateToggle({Name = "Riot Shield Kill Aura", Default = false, Callback = function(v)
-    riotShieldKill = v
-    if v then
-        Library:Notify({Title = "Riot Shield", Text = "Режим убийства всех игроков включен! При взятии щита все умрут.", Duration = 3})
-    else
-        Library:Notify({Title = "Riot Shield", Text = "Режим выключен", Duration = 2})
-    end
-end})
-
 Tab:CreateSection("Stinger")
 Tab:CreateToggle({Name = "Stinger Spam", Default = false, Callback = function(v)
     stingerSpam = v
@@ -117,6 +107,16 @@ Tab:CreateToggle({Name = "Stinger Spam", Default = false, Callback = function(v)
         Library:Notify({Title = "Stinger Spam", Text = "Включен! Авто-атака Stinger.", Duration = 2})
     else
         Library:Notify({Title = "Stinger Spam", Text = "Выключен", Duration = 2})
+    end
+end})
+
+Tab:CreateSection("Javelin")
+Tab:CreateToggle({Name = "Javelin Spam", Default = false, Callback = function(v)
+    javelinSpam = v
+    if v then
+        Library:Notify({Title = "Javelin Spam", Text = "Включен! Авто-атака Javelin.", Duration = 2})
+    else
+        Library:Notify({Title = "Javelin Spam", Text = "Выключен", Duration = 2})
     end
 end})
 
@@ -607,29 +607,6 @@ local function getShields()
     return shields
 end
 
--- Функция убийства всех игроков (кроме исключённых)
-local function killAllPlayers()
-    for _, target in ipairs(Players:GetPlayers()) do
-        if target == lp then continue end
-        local isExcluded = false
-        for _, excluded in ipairs(excludedPlayers) do
-            if target.Name == excluded then
-                isExcluded = true
-                break
-            end
-        end
-        if isExcluded then continue end
-        
-        local character = target.Character
-        if character then
-            local humanoid = character:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid.Health = 0
-            end
-        end
-    end
-end
-
 local function fireAtPart(part, child)
     local pos = vector.create(part.Position.X, part.Position.Y, part.Position.Z)
     fireRocket:InvokeServer({
@@ -674,18 +651,29 @@ local function fireStingerAtPart(part, child)
     })
 end
 
-local character = lp.Character or lp.CharacterAdded:Wait()
+local function fireJavelinAtPart(part, child)
+    local pos = vector.create(part.Position.X, part.Position.Y, part.Position.Z)
+    fireRocket:InvokeServer({
+        Direction = vector.create(0, -1, 0),
+        Settings = rocketSettings,
+        Origin = pos,
+        RocketModel = rocketModel,
+        Vehicle = child,
+        PlrFired = lp,
+        Weapon = child
+    })
+    rocketHit:FireServer({
+        Normal = Vector3.yAxis,
+        Player = lp,
+        Label = lp.Name .. "Javelin1",
+        HitPart = part,
+        Vehicle = child,
+        Position = pos,
+        Weapon = child
+    })
+end
 
--- Обработчик для Riot Shield (убийство всех при взятии в руки)
-character.ChildAdded:Connect(function(child)
-    if child:IsA("Tool") and riotShieldKill then
-        local name = child.Name:lower()
-        if name:find("riot") or name:find("shield") then
-            Library:Notify({Title = "Riot Shield", Text = "Щит активирован! Убиваем всех...", Duration = 2})
-            killAllPlayers()
-        end
-    end
-end)
+local character = lp.Character or lp.CharacterAdded:Wait()
 
 -- Обработчик RPG
 character.ChildAdded:Connect(function(child)
@@ -744,6 +732,33 @@ character.ChildAdded:Connect(function(child)
                 local hrp = player.Character:FindFirstChild("HumanoidRootPart")
                 if not hrp then continue end
                 task.spawn(fireStingerAtPart, hrp, child)
+            end
+            task.wait(0.1)
+        end
+    end
+end)
+
+-- Обработчик Javelin
+character.ChildAdded:Connect(function(child)
+    if child.Name == "Javelin" and javelinSpam then
+        Library:Notify({Title = "Javelin Spam", Text = "Javelin обнаружен! Начинаем спам.", Duration = 3})
+        while child.Parent == character and javelinSpam do
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player == lp then continue end
+                if not player.Character then continue end
+                
+                local isExcluded = false
+                for _, excluded in ipairs(excludedPlayers) do
+                    if player.Name == excluded then
+                        isExcluded = true
+                        break
+                    end
+                end
+                if isExcluded then continue end
+                
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if not hrp then continue end
+                task.spawn(fireJavelinAtPart, hrp, child)
             end
             task.wait(0.1)
         end
