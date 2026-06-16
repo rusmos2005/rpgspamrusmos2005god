@@ -1,0 +1,159 @@
+-- ============================================
+-- Pantsir S1 - Teleport to Parts
+-- Скрипт для быстрого перемещения к запчастям
+-- ============================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
+
+-- Координаты запчастей
+local PARTS = {
+    Vector3.new(-2454.871337890625, 106.02146911621094, -3370.7158203125),
+    Vector3.new(-1489.362060546875, 65.2723388671875, -2948.718505859375),
+    Vector3.new(408.7166442871094, 73.965576171875, 1206.142578125),
+    Vector3.new(-989.474365234375, 71.20712280273438, 132.05018615722656)
+}
+
+-- Функция телепортации
+local function teleportTo(pos)
+    local char = lp.Character
+    if not char then
+        warn("[Pantsir] Персонаж не найден!")
+        return
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        warn("[Pantsir] HumanoidRootPart не найден!")
+        return
+    end
+    hrp.CFrame = CFrame.new(pos)
+    print("[Pantsir] Телепорт к: " .. tostring(pos))
+end
+
+-- Создание GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "PantsirGUI"
+screenGui.Parent = lp:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 280, 0, 280)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -140)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+mainFrame.BackgroundTransparency = 0.05
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(100, 150, 255)
+stroke.Thickness = 2
+stroke.Transparency = 0.6
+stroke.Parent = mainFrame
+
+-- Заголовок
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+title.Text = "🛡️ Pantsir S1 🛡️"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 16
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = title
+
+-- Анимация RGB для заголовка
+local hue = 0
+local connection
+connection = RunService.Heartbeat:Connect(function()
+    hue = hue + 0.01
+    if hue > 1 then hue = 0 end
+    local color = Color3.fromHSV(hue, 1, 1)
+    title.TextColor3 = color
+end)
+
+-- При закрытии GUI отключаем анимацию
+local function cleanup()
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
+end
+
+-- Кнопка закрытия
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -34, 0, 6)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 14
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = mainFrame
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeBtn
+
+closeBtn.MouseButton1Click:Connect(function()
+    cleanup()
+    screenGui:Destroy()
+end)
+
+-- Функция создания кнопки части
+local function createPartButton(name, pos, yOffset)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.8, 0, 0, 40)
+    btn.Position = UDim2.new(0.1, 0, 0, yOffset)
+    btn.Text = "📍 " .. name
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.GothamBold
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    btn.BorderSizePixel = 0
+    btn.Parent = mainFrame
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = btn
+    
+    btn.MouseEnter:Connect(function()
+        btn.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+    end)
+    btn.MouseLeave:Connect(function()
+        btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    end)
+    
+    btn.MouseButton1Click:Connect(function()
+        teleportTo(pos)
+    end)
+    
+    return btn
+end
+
+-- Создаём кнопки с названиями "Запчасть 1" ... "Запчасть 4"
+createPartButton("Запчасть 1", PARTS[1], 55)
+createPartButton("Запчасть 2", PARTS[2], 105)
+createPartButton("Запчасть 3", PARTS[3], 155)
+createPartButton("Запчасть 4", PARTS[4], 205)
+
+-- Информационная строка
+local info = Instance.new("TextLabel")
+info.Size = UDim2.new(1, -20, 0, 20)
+info.Position = UDim2.new(0, 10, 0, 255)
+info.BackgroundTransparency = 1
+info.Text = "Нажмите на часть для телепорта"
+info.TextColor3 = Color3.fromRGB(150, 150, 170)
+info.TextSize = 10
+info.Font = Enum.Font.Gotham
+info.Parent = mainFrame
+
+print("[Pantsir] GUI загружен! Используйте для телепортации к запчастям.")
