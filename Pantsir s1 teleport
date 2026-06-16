@@ -1,34 +1,55 @@
 -- ============================================
--- Pantsir S1 - Teleport to Parts
--- Скрипт для быстрого перемещения к запчастям
+-- Pantsir S1 + M1117 + Maus (Mobile)
+-- Телепорт к запчастям + центр
 -- ============================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local lp = Players.LocalPlayer
 
--- Координаты запчастей
-local PARTS = {
+-- Координаты запчастей Pantsir S1 (5 шт)
+local PANTSIR_PARTS = {
     Vector3.new(-2454.871337890625, 106.02146911621094, -3370.7158203125),
     Vector3.new(-1489.362060546875, 65.2723388671875, -2948.718505859375),
     Vector3.new(408.7166442871094, 73.965576171875, 1206.142578125),
-    Vector3.new(-989.474365234375, 71.20712280273438, 132.05018615722656)
+    Vector3.new(-989.474365234375, 71.20712280273438, 132.05018615722656),
+    Vector3.new(-197.655517578125, 80.95536041259766, -1270.05322265625)
 }
+
+-- Координаты запчастей M1117 (4 шт)
+local M1117_PARTS = {
+    Vector3.new(-1734.155029296875, 67.62936401367188, -1651.9326171875),
+    Vector3.new(-97.77346801757812, 65.99736785888672, 2059.955078125),
+    Vector3.new(-1082.1163330078125, 68.55886840820312, -1007.572265625),
+    Vector3.new(-482.6784362792969, 70.69316864013672, -2242.6875)
+}
+
+-- Координаты Maus (4 шт, пятая убрана)
+local MAUS_PARTS = {
+    Vector3.new(-2286.727294921875, 76.9549789428711, -2494.11279296875),
+    Vector3.new(-1505.368408203125, 68.35636901855469, -2889.120361328125),
+    Vector3.new(414.3441162109375, 70.91244506835938, -1057.1551513671875),
+    Vector3.new(1312.33056640625, 70.9555892944336, 609.2532348632812)
+    -- пятая удалена
+}
+
+-- Центр карты (можно поменять)
+local CENTER_POS = Vector3.new(0, 75, 0)
 
 -- Функция телепортации
 local function teleportTo(pos)
     local char = lp.Character
     if not char then
-        warn("[Pantsir] Персонаж не найден!")
+        warn("[Teleport] Персонаж не найден!")
         return
     end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then
-        warn("[Pantsir] HumanoidRootPart не найден!")
+        warn("[Teleport] HumanoidRootPart не найден!")
         return
     end
     hrp.CFrame = CFrame.new(pos)
-    print("[Pantsir] Телепорт к: " .. tostring(pos))
+    print("[Teleport] Телепорт к: " .. tostring(pos))
 end
 
 -- Создание GUI
@@ -36,12 +57,14 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PantsirGUI"
 screenGui.Parent = lp:WaitForChild("PlayerGui")
 
+-- Основное окно (компактное для телефона)
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 280, 0, 280)
-mainFrame.Position = UDim2.new(0.5, -140, 0.5, -140)
+mainFrame.Size = UDim2.new(0, 260, 0, 380)
+mainFrame.Position = UDim2.new(0.5, -130, 0.5, -190)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BackgroundTransparency = 0.05
 mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Parent = screenGui
@@ -58,12 +81,12 @@ stroke.Parent = mainFrame
 
 -- Заголовок
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
+title.Size = UDim2.new(1, 0, 0, 36)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-title.Text = "🛡️ Pantsir S1 🛡️"
+title.Text = "🛡️ Parts Locator 🛡️"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 16
+title.TextSize = 14
 title.Font = Enum.Font.GothamBold
 title.Parent = mainFrame
 
@@ -71,31 +94,25 @@ local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 12)
 titleCorner.Parent = title
 
--- Анимация RGB для заголовка
+-- RGB анимация
 local hue = 0
 local connection
-connection = RunService.Heartbeat:Connect(function()
-    hue = hue + 0.01
-    if hue > 1 then hue = 0 end
-    local color = Color3.fromHSV(hue, 1, 1)
-    title.TextColor3 = color
-end)
-
--- При закрытии GUI отключаем анимацию
-local function cleanup()
-    if connection then
-        connection:Disconnect()
-        connection = nil
-    end
+local function startRainbow()
+    if connection then return end
+    connection = RunService.Heartbeat:Connect(function()
+        hue = (hue + 0.005) % 1
+        title.TextColor3 = Color3.fromHSV(hue, 1, 1)
+    end)
 end
+startRainbow()
 
--- Кнопка закрытия
+-- Кнопка закрытия (увеличена для тапа)
 local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 28, 0, 28)
-closeBtn.Position = UDim2.new(1, -34, 0, 6)
+closeBtn.Size = UDim2.new(0, 32, 0, 32)
+closeBtn.Position = UDim2.new(1, -38, 0, 2)
 closeBtn.Text = "✕"
 closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.TextSize = 14
+closeBtn.TextSize = 16
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 closeBtn.BorderSizePixel = 0
@@ -105,55 +122,119 @@ closeCorner.CornerRadius = UDim.new(0, 6)
 closeCorner.Parent = closeBtn
 
 closeBtn.MouseButton1Click:Connect(function()
-    cleanup()
+    if connection then connection:Disconnect() end
     screenGui:Destroy()
 end)
 
--- Функция создания кнопки части
-local function createPartButton(name, pos, yOffset)
+-- Scrolling Frame для мобильной прокрутки
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -8, 1, -44)
+scrollFrame.Position = UDim2.new(0, 4, 0, 40)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 150, 255)
+scrollFrame.Parent = mainFrame
+
+-- UIListLayout для автоматического расположения
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 4)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = scrollFrame
+
+-- Функция создания кнопки (компактная для телефона)
+local function createPartButton(name, pos)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.8, 0, 0, 40)
-    btn.Position = UDim2.new(0.1, 0, 0, yOffset)
+    btn.Size = UDim2.new(0.9, 0, 0, 32)
+    btn.Position = UDim2.new(0.05, 0, 0, 0)
     btn.Text = "📍 " .. name
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 14
+    btn.TextSize = 12
     btn.Font = Enum.Font.GothamBold
     btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
     btn.BorderSizePixel = 0
-    btn.Parent = mainFrame
+    btn.Parent = scrollFrame
     local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.CornerRadius = UDim.new(0, 6)
     btnCorner.Parent = btn
     
-    btn.MouseEnter:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
-    end)
-    btn.MouseLeave:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-    end)
-    
-    btn.MouseButton1Click:Connect(function()
-        teleportTo(pos)
-    end)
-    
+    btn.MouseEnter:Connect(function() btn.BackgroundColor3 = Color3.fromRGB(70, 70, 80) end)
+    btn.MouseLeave:Connect(function() btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55) end)
+    btn.MouseButton1Click:Connect(function() teleportTo(pos) end)
     return btn
 end
 
--- Создаём кнопки с названиями "Запчасть 1" ... "Запчасть 4"
-createPartButton("Запчасть 1", PARTS[1], 55)
-createPartButton("Запчасть 2", PARTS[2], 105)
-createPartButton("Запчасть 3", PARTS[3], 155)
-createPartButton("Запчасть 4", PARTS[4], 205)
+-- Функция создания заголовка секции
+local function createSectionTitle(text, color)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.9, 0, 0, 18)
+    label.Position = UDim2.new(0.05, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color
+    label.TextSize = 11
+    label.Font = Enum.Font.GothamBold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = scrollFrame
+    return label
+end
 
--- Информационная строка
-local info = Instance.new("TextLabel")
-info.Size = UDim2.new(1, -20, 0, 20)
-info.Position = UDim2.new(0, 10, 0, 255)
-info.BackgroundTransparency = 1
-info.Text = "Нажмите на часть для телепорта"
-info.TextColor3 = Color3.fromRGB(150, 150, 170)
-info.TextSize = 10
-info.Font = Enum.Font.Gotham
-info.Parent = mainFrame
+-- ========== СЕКЦИЯ 1: PANTSIR S1 ==========
+createSectionTitle("🔹 Pantsir S1 Parts", Color3.fromRGB(255, 200, 100))
+createPartButton("Запчасть 1", PANTSIR_PARTS[1])
+createPartButton("Запчасть 2", PANTSIR_PARTS[2])
+createPartButton("Запчасть 3", PANTSIR_PARTS[3])
+createPartButton("Запчасть 4", PANTSIR_PARTS[4])
+createPartButton("Запчасть 5", PANTSIR_PARTS[5])
 
-print("[Pantsir] GUI загружен! Используйте для телепортации к запчастям.")
+-- Разделитель
+local sep1 = Instance.new("Frame")
+sep1.Size = UDim2.new(0.9, 0, 0, 1)
+sep1.Position = UDim2.new(0.05, 0, 0, 0)
+sep1.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+sep1.BorderSizePixel = 0
+sep1.Parent = scrollFrame
+
+-- ========== СЕКЦИЯ 2: M1117 ==========
+createSectionTitle("🔸 M1117 Parts", Color3.fromRGB(100, 200, 255))
+createPartButton("Запчасть 1 (M)", M1117_PARTS[1])
+createPartButton("Запчасть 2 (M)", M1117_PARTS[2])
+createPartButton("Запчасть 3 (M)", M1117_PARTS[3])
+createPartButton("Запчасть 4 (M)", M1117_PARTS[4])
+
+-- Разделитель
+local sep2 = Instance.new("Frame")
+sep2.Size = UDim2.new(0.9, 0, 0, 1)
+sep2.Position = UDim2.new(0.05, 0, 0, 0)
+sep2.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+sep2.BorderSizePixel = 0
+sep2.Parent = scrollFrame
+
+-- ========== СЕКЦИЯ 3: MAUS (переименовано, теперь 4 запчасти) ==========
+createSectionTitle("🟢 Maus Parts", Color3.fromRGB(100, 255, 150))
+createPartButton("Maus 1", MAUS_PARTS[1])
+createPartButton("Maus 2", MAUS_PARTS[2])
+createPartButton("Maus 3", MAUS_PARTS[3])
+createPartButton("Maus 4", MAUS_PARTS[4])
+
+-- Разделитель
+local sep3 = Instance.new("Frame")
+sep3.Size = UDim2.new(0.9, 0, 0, 1)
+sep3.Position = UDim2.new(0.05, 0, 0, 0)
+sep3.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+sep3.BorderSizePixel = 0
+sep3.Parent = scrollFrame
+
+-- ========== ОТДЕЛЬНАЯ КНОПКА: ЦЕНТР ==========
+createSectionTitle("⭐ Центр карты", Color3.fromRGB(255, 255, 100))
+createPartButton("Телепорт в центр", CENTER_POS)
+
+-- Обновление размера Canvas при добавлении элементов
+local function updateCanvas()
+    task.wait(0.05)
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+end
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvas)
+updateCanvas()
+
+print("[Teleport] GUI загружен! 3 секции + центр, всего 14 запчастей.")
