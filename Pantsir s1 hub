@@ -1,6 +1,6 @@
 -- ================================================================
---   Pantsir S1 Hub — расширенный Rayfield GUI (полная версия)
---   Версия: 2.0
+--   Pantsir S1 Hub — расширенный Rayfield GUI (исправлен Parts + Shield)
+--   Версия: 2.4
 -- ================================================================
 
 local Players = game:GetService("Players")
@@ -16,7 +16,7 @@ local Window = Rayfield:CreateWindow({
     Name = "Pantsir S1 Hub",
     Icon = 0,
     LoadingTitle = "Loading...",
-    LoadingSubtitle = "v2.0",
+    LoadingSubtitle = "v2.4",
     Theme = loadstring(game:HttpGet('https://raw.githubusercontent.com/FacilityHUB/Interface-Utilisateur/refs/heads/main/tre'))(),
     DisableBuildWarnings = true,
     ConfigurationSaving = {
@@ -34,6 +34,7 @@ local isProcessing = false
 
 -- ======= RPG спам =======
 local attackPlayers = false
+local attackShields = false   -- новый переключатель
 local excludedPlayers = {}
 
 -- ======= Аирдроп =======
@@ -91,20 +92,45 @@ local CENTER_CFRAME = CFrame.new(
     -0.707079291, 0, -0.707134247
 )
 
+-- ======= Надёжная функция телепортации (исправлена) =======
+local function safeTeleport(pos)
+    local char = lp.Character
+    if not char then
+        local success = lp.CharacterAdded:Wait(5)
+        if not success then return false end
+        char = lp.Character
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        hrp = char:WaitForChild("HumanoidRootPart", 2)
+        if not hrp then return false end
+    end
+    hrp.CFrame = CFrame.new(pos)
+    task.wait(0.1) -- небольшая задержка для стабильности
+    return true
+end
+
+local function safeTeleportCFrame(cf)
+    local char = lp.Character
+    if not char then
+        local success = lp.CharacterAdded:Wait(5)
+        if not success then return false end
+        char = lp.Character
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        hrp = char:WaitForChild("HumanoidRootPart", 2)
+        if not hrp then return false end
+    end
+    hrp.CFrame = cf
+    task.wait(0.1)
+    return true
+end
+
 -- ======= Базовые функции =======
 local function getRoot()
     local char = plr.Character or plr.CharacterAdded:Wait()
     return char:WaitForChild("HumanoidRootPart")
-end
-
-local function teleportTo(pos)
-    local root = getRoot()
-    root.CFrame = CFrame.new(pos)
-end
-
-local function teleportToCFrame(cf)
-    local root = getRoot()
-    root.CFrame = cf
 end
 
 local function getCurrentCash()
@@ -137,9 +163,17 @@ local function storeSellPosition()
     return false
 end
 
--- ======= Фарм =======
+-- ======= Фарм (исправленный) =======
 local function collectBarrelsLoop()
     while collectingBarrels do
+        if not Configuration.Farm.SellPosition then
+            storeSellPosition()
+        end
+        if not Configuration.Farm.SellPosition then
+            local spawn = workspace:FindFirstChild("SpawnLocation")
+            Configuration.Farm.SellPosition = spawn and spawn.CFrame * CFrame.new(0, 3, 0) or CFrame.new(0, 78, 0)
+        end
+
         for i, pos in ipairs(Configuration.OilBarrels) do
             if not collectingBarrels then break end
 
@@ -153,7 +187,13 @@ local function collectBarrelsLoop()
             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
             task.wait(1)
 
-            if not Configuration.Farm.SellPosition then storeSellPosition() end
+            if not Configuration.Farm.SellPosition then
+                storeSellPosition()
+                if not Configuration.Farm.SellPosition then
+                    local spawn = workspace:FindFirstChild("SpawnLocation")
+                    Configuration.Farm.SellPosition = spawn and spawn.CFrame * CFrame.new(0, 3, 0) or CFrame.new(0, 78, 0)
+                end
+            end
 
             if Configuration.Farm.SellPosition then
                 root.CFrame = Configuration.Farm.SellPosition
@@ -164,6 +204,8 @@ local function collectBarrelsLoop()
                 VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
                 task.wait(1)
             end
+
+            task.wait(6)
         end
         task.wait(1)
     end
@@ -270,7 +312,7 @@ local function startAutoFarm()
     end)
 end
 
--- ======= RPG СПАМ =======
+-- ======= RPG СПАМ (с атакой щитов) =======
 local function fireAtPart(part, child)
     local pos = vector.create(part.Position.X, part.Position.Y, part.Position.Z)
     local rocketHit = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("RocketHit")
@@ -305,6 +347,29 @@ local function fireAtPart(part, child)
     })
 end
 
+local function getShields()
+    local shields = {}
+    local tycoons = workspace:FindFirstChild("Tycoon") and workspace.Tycoon:FindFirstChild("Tycoons")
+    if not tycoons then return shields end
+    for _, tycoon in ipairs(tycoons:GetChildren()) do
+        local purchased = tycoon:FindFirstChild("PurchasedObjects")
+        if purchased then
+            local baseShield = purchased:FindFirstChild("Base Shield")
+            if baseShield then
+                local shieldFolder = baseShield:FindFirstChild("Shield")
+                if shieldFolder then
+                    for _, shield in ipairs(shieldFolder:GetChildren()) do
+                        if shield:IsA("BasePart") and shield.Name ~= "Health" then
+                            table.insert(shields, shield)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return shields
+end
+
 local function isExcluded(name)
     for _, excluded in ipairs(excludedPlayers) do
         if excluded == name then return true end
@@ -313,21 +378,26 @@ local function isExcluded(name)
 end
 
 local function startRPGSpam()
+    if not (attackPlayers or attackShields) then return end
+    local char = lp.Character
+    if not char then return end
+    local rpg = char:FindFirstChild("RPG") or (lp.Backpack and lp.Backpack:FindFirstChild("RPG"))
+    if not rpg then return end
+
+    if attackShields then
+        for _, shield in ipairs(getShields()) do
+            task.spawn(fireAtPart, shield, rpg)
+        end
+    end
+
     if attackPlayers then
-        local char = lp.Character
-        if char then
-            local rpg = char:FindFirstChild("RPG") or (lp.Backpack and lp.Backpack:FindFirstChild("RPG"))
-            if rpg then
-                for _, player in ipairs(Players:GetPlayers()) do
-                    if player ~= lp and player.Character then
-                        if not isExcluded(player.Name) then
-                            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-                            if hrp then
-                                fireAtPart(hrp, rpg)
-                            end
-                        end
-                    end
-                end
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player == lp then continue end
+            if not player.Character then continue end
+            if isExcluded(player.Name) then continue end
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                task.spawn(fireAtPart, hrp, rpg)
             end
         end
     end
@@ -375,7 +445,7 @@ local function collectAllAirdrops()
     end
     Rayfield:Notify({Title = "AirDrop", Text = "Сбор " .. #list .. " дропов...", Duration = 2})
     for _, part in ipairs(list) do
-        getRoot().CFrame = part.CFrame
+        safeTeleport(part.Position + Vector3.new(0, 5, 0))
         task.wait(0.5)
     end
     Rayfield:Notify({Title = "AirDrop", Text = "Сбор завершён!", Duration = 2})
@@ -390,11 +460,11 @@ local function startAutoAirdrop()
             if #list > 0 then
                 for _, part in ipairs(list) do
                     if not autoAirdropActive then break end
-                    getRoot().CFrame = part.CFrame
+                    safeTeleport(part.Position + Vector3.new(0, 5, 0))
                     task.wait(0.5)
                 end
             end
-            task.wait(2) -- пауза между циклами
+            task.wait(2)
         end
     end)
     Rayfield:Notify({Title = "AirDrop", Text = "Автосбор включён", Duration = 2})
@@ -475,21 +545,36 @@ ActionsTab:CreateToggle({
     end,
 })
 
--- ======= Combat =======
+-- ======= Combat (добавлен Attack Shields) =======
 CombatTab:CreateToggle({
-    Name = "Enable RPG Spam",
+    Name = "Enable RPG Spam (Players)",
     CurrentValue = false,
-    Flag = "RPGSpam",
+    Flag = "RPGSpamPlayers",
     Callback = function(Value)
         attackPlayers = Value
-        if Value then
-            task.spawn(function()
-                while attackPlayers do
-                    startRPGSpam()
-                    task.wait(0.1)
-                end
-            end)
-        end
+        if not (attackPlayers or attackShields) then return end
+        task.spawn(function()
+            while attackPlayers or attackShields do
+                startRPGSpam()
+                task.wait(0.1)
+            end
+        end)
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Attack Shields",
+    CurrentValue = false,
+    Flag = "RPGSpamShields",
+    Callback = function(Value)
+        attackShields = Value
+        if not (attackPlayers or attackShields) then return end
+        task.spawn(function()
+            while attackPlayers or attackShields do
+                startRPGSpam()
+                task.wait(0.1)
+            end
+        end)
     end,
 })
 
@@ -513,13 +598,13 @@ CombatTab:CreateTextBox({
     end,
 })
 
--- ======= Parts =======
+-- ======= Parts (исправлен) =======
 PartsTab:CreateSection("Pantsir S1")
 for i, pos in ipairs(PANTSIR_PARTS) do
     PartsTab:CreateButton({
-        Name = "Part " .. i,
+        Name = "Запчасть " .. i,
         Callback = function()
-            teleportTo(pos)
+            safeTeleport(pos)
         end,
     })
 end
@@ -529,7 +614,7 @@ for i, pos in ipairs(M1117_PARTS) do
     PartsTab:CreateButton({
         Name = "M1117 " .. i,
         Callback = function()
-            teleportTo(pos)
+            safeTeleport(pos)
         end,
     })
 end
@@ -539,7 +624,7 @@ for i, pos in ipairs(MAUS_PARTS) do
     PartsTab:CreateButton({
         Name = "Maus " .. i,
         Callback = function()
-            teleportTo(pos)
+            safeTeleport(pos)
         end,
     })
 end
@@ -548,7 +633,7 @@ PartsTab:CreateSection("Center")
 PartsTab:CreateButton({
     Name = "Teleport to Center",
     Callback = function()
-        teleportToCFrame(CENTER_CFRAME)
+        safeTeleportCFrame(CENTER_CFRAME)
     end,
 })
 
@@ -564,4 +649,4 @@ UtilityTab:CreateButton({
 -- ======= ЗАПУСК =======
 Rayfield:LoadConfiguration()
 
-print("Pantsir S1 Hub loaded! (Full version v2.0)")
+print("Pantsir S1 Hub loaded! (v2.4 — Parts исправлены, добавлены Shields)")
