@@ -1,332 +1,92 @@
--- ================================================================
---   Pantsir S1 Hub — расширенный Rayfield GUI (исправлен Parts + Shield)
---   Версия: 2.4
--- ================================================================
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/LonerYT/ZalupaLib/main/Library.lua"))()
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local Workspace = game:GetService("Workspace")
 local RS = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
 local lp = Players.LocalPlayer
 
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+-- ============================================
+-- ОБЩИЕ ПЕРЕМЕННЫЕ И ФУНКЦИИ
+-- ============================================
+local rocketHit = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("RocketHit")
+local fireRocket = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("FireRocket")
+local rocketModel = RS:WaitForChild("RocketSystem"):WaitForChild("Rockets"):WaitForChild("RPG Rocket")
 
-local Window = Rayfield:CreateWindow({
-    Name = "Pantsir S1 Hub",
-    Icon = 0,
-    LoadingTitle = "Loading...",
-    LoadingSubtitle = "v2.4",
-    Theme = loadstring(game:HttpGet('https://raw.githubusercontent.com/FacilityHUB/Interface-Utilisateur/refs/heads/main/tre'))(),
-    DisableBuildWarnings = true,
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "PantsirHub",
-        FileName = "Settings"
-    }
-})
-
-local plr = Players.LocalPlayer
-local originalPosition = nil
-local farmingConnection = nil
-local isFarming = false
-local isProcessing = false
-
--- ======= RPG спам =======
-local attackPlayers = false
-local attackShields = false   -- новый переключатель
-local excludedPlayers = {}
-
--- ======= Аирдроп =======
-local autoAirdropActive = false
-local autoAirdropLoop = nil
-
--- ======= Конфигурация =======
-local Configuration = {
-    Farm = {
-        AutoBuy = false,
-        RecupMonay = false,
-        ModeRecupMonay = "Crate",
-        CashTarget = 100000,
-        FallbackTeleports = loadstring(game:HttpGet("https://raw.githubusercontent.com/FacilityHUB/War-Tycoon/refs/heads/main/Positions"))(),
-        SellPosition = nil,
-        TeleportDelay = 2,
-        RecupCrate = 7,
-        SellCrate = 7,
-    },
-    CapturePoint = Vector3.new(-503, 183, -1021),
-    OilBarrels = {
-        Vector3.new(-1938, 121, -3700),
-        Vector3.new(-1208, 73, -881),
-        Vector3.new(1705, 121, 3779)
-    }
+local rocketSettings = {
+    expShake = { fadeInTime = 0.05, magnitude = 3, rotInfluence = vector.create(0.4, 0, 0.4), fadeOutTime = 0.5, roughness = 3, posInfluence = vector.create(1, 1, 0) },
+    gravity = vector.create(0, -20, 0),
+    HelicopterDamage = 450, FireRate = 15, VehicleDamage = 350,
+    ExpName = "RPG", RocketAmount = 1, ExpRadius = 12,
+    BoatDamage = 300, TankDamage = 300, Acceleration = 8,
+    ShieldDamage = 9999, Distance = 4000, PlaneDamage = 500,
+    GunshipDamage = 170, velocity = 200, ExplosionDamage = 120
 }
 
-local capPointSavedPos = nil
-local collectingBarrels = false
+-- Состояния
+local state = {
+    attackPlayers = false,
+    attackShields = false,
+    infiniteAmmoRPG = false,
+    stinger = false,
+    infiniteStinger = false,
+    javelin = false,
+    targetAll = false,
+    autoOil = false,
+    autoAirdrop = false,
+    excludedBases = {},
+}
 
--- ======= Координаты запчастей =======
-local PANTSIR_PARTS = {
-    Vector3.new(-2454.871337890625, 106.02146911621094, -3370.7158203125),
-    Vector3.new(-1489.362060546875, 65.2723388671875, -2948.718505859375),
-    Vector3.new(408.7166442871094, 73.965576171875, 1206.142578125),
-    Vector3.new(-989.474365234375, 71.20712280273438, 132.05018615722656),
-    Vector3.new(-197.655517578125, 80.95536041259766, -1270.05322265625)
-}
-local M1117_PARTS = {
-    Vector3.new(-1734.155029296875, 67.62936401367188, -1651.9326171875),
-    Vector3.new(-97.77346801757812, 65.99736785888672, 2059.955078125),
-    Vector3.new(-1082.1163330078125, 68.55886840820312, -1007.572265625),
-    Vector3.new(-482.6784362792969, 70.69316864013672, -2242.6875)
-}
-local MAUS_PARTS = {
-    Vector3.new(-2286.727294921875, 76.9549789428711, -2494.11279296875),
-    Vector3.new(-1505.368408203125, 68.35636901855469, -2889.120361328125),
-    Vector3.new(414.3441162109375, 70.91244506835938, -1057.1551513671875),
-    Vector3.new(1312.33056640625, 70.9555892944336, 609.2532348632812)
-}
-local CENTER_CFRAME = CFrame.new(
-    -504.47818, 173.98941, -1023.05316,
-    0.707134247, 0, -0.707079291,
-    0, -1, 0,
-    -0.707079291, 0, -0.707134247
-)
+local threads = {}
 
--- ======= Надёжная функция телепортации (исправлена) =======
-local function safeTeleport(pos)
-    local char = lp.Character
-    if not char then
-        local success = lp.CharacterAdded:Wait(5)
-        if not success then return false end
-        char = lp.Character
+local function manageThread(name, func, active)
+    if active then
+        if threads[name] then task.cancel(threads[name]) end
+        threads[name] = task.spawn(func)
+    else
+        if threads[name] then task.cancel(threads[name]); threads[name] = nil end
     end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        hrp = char:WaitForChild("HumanoidRootPart", 2)
-        if not hrp then return false end
-    end
-    hrp.CFrame = CFrame.new(pos)
-    task.wait(0.1) -- небольшая задержка для стабильности
-    return true
 end
 
-local function safeTeleportCFrame(cf)
+local function stopAllThreads()
+    for name, th in pairs(threads) do
+        task.cancel(th)
+    end
+    threads = {}
+end
+
+-- ============================================
+-- ОБЩИЕ УТИЛИТЫ
+-- ============================================
+local function teleportTo(pos)
     local char = lp.Character
-    if not char then
-        local success = lp.CharacterAdded:Wait(5)
-        if not success then return false end
-        char = lp.Character
-    end
+    if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        hrp = char:WaitForChild("HumanoidRootPart", 2)
-        if not hrp then return false end
-    end
-    hrp.CFrame = cf
+    if hrp then hrp.CFrame = CFrame.new(pos) end
+end
+
+local function pressE()
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(0.1)
-    return true
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
--- ======= Базовые функции =======
-local function getRoot()
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    return char:WaitForChild("HumanoidRootPart")
-end
-
-local function getCurrentCash()
-    local stats = plr:FindFirstChild("leaderstats")
-    local cash = stats and stats:FindFirstChild("Cash")
-    return cash and cash.Value or 0
-end
-
-local function findPlayerTycoon()
-    for _, tycoon in ipairs(workspace.Tycoon.Tycoons:GetChildren()) do
-        if tycoon:FindFirstChild("Owner") and tycoon.Owner.Value == plr then
-            return tycoon
-        end
+local function getWeapon(name)
+    local char = lp.Character
+    if not char then return nil end
+    local wep = char:FindFirstChild(name)
+    if not wep then
+        wep = lp.Backpack and lp.Backpack:FindFirstChild(name)
     end
-    return nil
+    return wep
 end
 
-local function storeSellPosition()
-    local tycoon = findPlayerTycoon()
-    if not tycoon then return false end
-
-    local oilCollector = tycoon:FindFirstChild("Essentials") and tycoon.Essentials:FindFirstChild("Oil Collector")
-    if oilCollector then
-        local collectorPart = oilCollector:FindFirstChild("Collector") and oilCollector.Collector:FindFirstChild("Plane")
-        if collectorPart then
-            Configuration.Farm.SellPosition = collectorPart.CFrame * CFrame.new(0, 3, 0)
-            return true
-        end
-    end
-    return false
-end
-
--- ======= Фарм (исправленный) =======
-local function collectBarrelsLoop()
-    while collectingBarrels do
-        if not Configuration.Farm.SellPosition then
-            storeSellPosition()
-        end
-        if not Configuration.Farm.SellPosition then
-            local spawn = workspace:FindFirstChild("SpawnLocation")
-            Configuration.Farm.SellPosition = spawn and spawn.CFrame * CFrame.new(0, 3, 0) or CFrame.new(0, 78, 0)
-        end
-
-        for i, pos in ipairs(Configuration.OilBarrels) do
-            if not collectingBarrels then break end
-
-            local root = getRoot()
-
-            root.CFrame = CFrame.new(pos)
-            task.wait(Configuration.Farm.TeleportDelay)
-
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-            task.wait(Configuration.Farm.RecupCrate)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-            task.wait(1)
-
-            if not Configuration.Farm.SellPosition then
-                storeSellPosition()
-                if not Configuration.Farm.SellPosition then
-                    local spawn = workspace:FindFirstChild("SpawnLocation")
-                    Configuration.Farm.SellPosition = spawn and spawn.CFrame * CFrame.new(0, 3, 0) or CFrame.new(0, 78, 0)
-                end
-            end
-
-            if Configuration.Farm.SellPosition then
-                root.CFrame = Configuration.Farm.SellPosition
-                task.wait(Configuration.Farm.TeleportDelay)
-
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-                task.wait(Configuration.Farm.SellCrate)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-                task.wait(1)
-            end
-
-            task.wait(6)
-        end
-        task.wait(1)
-    end
-end
-
-local function isGreenButton(btn)
-    local neon = btn:FindFirstChild("Neon") or btn:FindFirstChild("Button")
-    if neon and neon:IsA("BasePart") then
-        local color = neon.Color
-        return (color.G > color.R and color.G > color.B)
-    end
-    return false
-end
-
-local function collectAndSellCrate()
-    if isProcessing then return end
-    isProcessing = true
-
-    local crates = workspace:FindFirstChild("Game Systems") and workspace["Game Systems"]:FindFirstChild("Crate Workspace")
-    local found = false
-
-    if crates then
-        for _, crate in ipairs(crates:GetChildren()) do
-            if crate.Name:find("Crate") and crate:IsA("BasePart") then
-                local owner = crate:GetAttribute("Owner")
-                if owner and tostring(owner) == plr.Name then continue end
-
-                local root = getRoot()
-                root.CFrame = crate.CFrame * CFrame.new(3, 0, 0)
-                task.wait(2)
-
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-                task.wait(Configuration.Farm.RecupCrate)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-
-                task.wait(2)
-
-                if not Configuration.Farm.SellPosition then storeSellPosition() end
-                if Configuration.Farm.SellPosition then
-                    root.CFrame = Configuration.Farm.SellPosition
-                    task.wait(2)
-                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-                    task.wait(Configuration.Farm.SellCrate)
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-                    task.wait(2)
-                end
-                found = true
-                break
-            end
-        end
-    end
-
-    if not found then
-        for _, pos in ipairs(Configuration.Farm.FallbackTeleports) do
-            if not isFarming then break end
-            getRoot().CFrame = pos
-            task.wait(Configuration.Farm.TeleportDelay)
-        end
-    end
-    isProcessing = false
-end
-
-local function startAutoFarm()
-    if farmingConnection then return end
-    isFarming = true
-    originalPosition = getRoot().CFrame
-    storeSellPosition()
-
-    farmingConnection = RunService.Heartbeat:Connect(function()
-        if not isFarming then
-            if farmingConnection then farmingConnection:Disconnect() farmingConnection = nil end
-            return
-        end
-        if isProcessing or collectingBarrels then return end
-
-        local currentMoney = getCurrentCash()
-
-        if Configuration.Farm.AutoBuy and currentMoney >= Configuration.Farm.CashTarget then
-            local tycoon = findPlayerTycoon()
-            local buttons = tycoon and tycoon:FindFirstChild("UnpurchasedButtons")
-
-            if buttons then
-                local targetButton = nil
-                for _, btn in ipairs(buttons:GetChildren()) do
-                    if isGreenButton(btn) then
-                        targetButton = btn
-                        break
-                    end
-                end
-
-                if targetButton then
-                    local neon = targetButton:FindFirstChild("Neon") or targetButton:FindFirstChild("Button")
-                    getRoot().CFrame = neon.CFrame + Vector3.new(0, 5, 0)
-                    task.wait(Configuration.Farm.TeleportDelay)
-                else
-                    collectAndSellCrate()
-                end
-            else
-                collectAndSellCrate()
-            end
-        elseif Configuration.Farm.RecupMonay then
-            collectAndSellCrate()
-        end
-    end)
-end
-
--- ======= RPG СПАМ (с атакой щитов) =======
-local function fireAtPart(part, child)
+-- ============================================
+-- ФУНКЦИЯ АТАКИ (для всех видов)
+-- ============================================
+local function fireAtPart(part, child, label)
     local pos = vector.create(part.Position.X, part.Position.Y, part.Position.Z)
-    local rocketHit = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("RocketHit")
-    local fireRocket = RS:WaitForChild("RocketSystem"):WaitForChild("Events"):WaitForChild("FireRocket")
-    local rocketModel = RS:WaitForChild("RocketSystem"):WaitForChild("Rockets"):WaitForChild("RPG Rocket")
-    local rocketSettings = {
-        expShake = { fadeInTime = 0.05, magnitude = 3, rotInfluence = vector.create(0.4, 0, 0.4), fadeOutTime = 0.5, roughness = 3, posInfluence = vector.create(1, 1, 0) },
-        gravity = vector.create(0, -20, 0),
-        HelicopterDamage = 450, FireRate = 15, VehicleDamage = 350,
-        ExpName = "RPG", RocketAmount = 1, ExpRadius = 12,
-        BoatDamage = 300, TankDamage = 300, Acceleration = 8,
-        ShieldDamage = 9999, Distance = 4000, PlaneDamage = 500,
-        GunshipDamage = 170, velocity = 200, ExplosionDamage = 120
-    }
     fireRocket:InvokeServer({
         Direction = vector.create(0, -1, 0),
         Settings = rocketSettings,
@@ -339,12 +99,19 @@ local function fireAtPart(part, child)
     rocketHit:FireServer({
         Normal = Vector3.yAxis,
         Player = lp,
-        Label = lp.Name .. "Rocket1",
+        Label = lp.Name .. (label or "Rocket"),
         HitPart = part,
         Vehicle = child,
         Position = pos,
         Weapon = child
     })
+end
+
+-- ============================================
+-- RPG СПАМ (с инфинит аммо через gc)
+-- ============================================
+local function getRPGWeapon()
+    return getWeapon("RPG")
 end
 
 local function getShields()
@@ -370,283 +137,556 @@ local function getShields()
     return shields
 end
 
-local function isExcluded(name)
-    for _, excluded in ipairs(excludedPlayers) do
-        if excluded == name then return true end
+local function getPlayers()
+    local targets = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == lp then continue end
+        if not player.Character then continue end
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then table.insert(targets, hrp) end
     end
-    return false
+    return targets
 end
 
-local function startRPGSpam()
-    if not (attackPlayers or attackShields) then return end
-    local char = lp.Character
-    if not char then return end
-    local rpg = char:FindFirstChild("RPG") or (lp.Backpack and lp.Backpack:FindFirstChild("RPG"))
-    if not rpg then return end
-
-    if attackShields then
-        for _, shield in ipairs(getShields()) do
-            task.spawn(fireAtPart, shield, rpg)
-        end
-    end
-
-    if attackPlayers then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player == lp then continue end
-            if not player.Character then continue end
-            if isExcluded(player.Name) then continue end
-            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                task.spawn(fireAtPart, hrp, rpg)
+-- RPG цикл
+local function rpgLoop()
+    while state.attackPlayers or state.attackShields do
+        local wep = getRPGWeapon()
+        if not wep then task.wait(0.5) continue end
+        if state.attackPlayers then
+            for _, target in ipairs(getPlayers()) do
+                if not state.attackPlayers then break end
+                task.spawn(function() pcall(fireAtPart, target, wep, "RPG") end)
             end
         end
+        if state.attackShields then
+            for _, target in ipairs(getShields()) do
+                if not state.attackShields then break end
+                task.spawn(function() pcall(fireAtPart, target, wep, "RPG") end)
+            end
+        end
+        task.wait(0.1)
     end
 end
 
--- ======= AIRDROP =======
-local function getAllAirdrops()
-    local airdrops = {}
-    local gameSystems = workspace:FindFirstChild("Game Systems")
-    local airdropFolder = nil
-    if gameSystems then
-        local collectibles = gameSystems:FindFirstChild("Collectibles Workspace")
-        if collectibles then
-            airdropFolder = collectibles:FindFirstChild("AirDrop")
+-- Infinite Ammo RPG через gc
+task.spawn(function()
+    while task.wait() do
+        if state.infiniteAmmoRPG then
+            for _, v in pairs(getgc(true)) do
+                if type(v) == "table" and rawget(v, "Mode") == "RPG" and rawget(v, "Ammo") ~= nil then
+                    rawset(v, "Ammo", math.huge)
+                    rawset(v, "Bullets", math.huge)
+                    rawset(v, "FireRate", 1)
+                end
+            end
         end
     end
-    if not airdropFolder then
-        airdropFolder = workspace:FindFirstChild("AirDrop")
-    end
-    if not airdropFolder then return airdrops end
+end)
 
-    for _, child in pairs(airdropFolder:GetChildren()) do
-        if child.Name:match("^Airdrop_") then
-            local mainPart = nil
-            local partsFolder = child:FindFirstChild("Parts")
-            if partsFolder then
-                mainPart = partsFolder:FindFirstChild("MainPart")
-            end
-            if not mainPart then
-                mainPart = child:FindFirstChild("MainPart")
-            end
-            if mainPart and mainPart:IsA("BasePart") then
-                table.insert(airdrops, mainPart)
-            end
+-- ============================================
+-- STINGER СПАМ + Infinite Ammo
+-- ============================================
+local function stingerLoop()
+    while state.stinger do
+        local wep = getWeapon("Stinger")
+        if not wep then task.wait(0.5) continue end
+        for _, target in ipairs(getPlayers()) do
+            if not state.stinger then break end
+            task.spawn(function() pcall(fireAtPart, target, wep, "Stinger") end)
         end
+        task.wait(0.1)
     end
-    return airdrops
 end
 
-local function collectAllAirdrops()
-    local list = getAllAirdrops()
-    if #list == 0 then
-        Rayfield:Notify({Title = "AirDrop", Text = "Дропов не найдено", Duration = 2})
-        return
+local function infiniteStingerLoop()
+    while state.infiniteStinger do
+        local stinger = getWeapon("Stinger")
+        if stinger then
+            local ammo = stinger:FindFirstChild("Ammo")
+            if ammo and ammo:IsA("NumberValue") then ammo.Value = 999 end
+            local currentAmmo = stinger:FindFirstChild("CurrentAmmo")
+            if currentAmmo and currentAmmo:IsA("NumberValue") then currentAmmo.Value = 999 end
+            if stinger:GetAttribute("Ammo") then stinger:SetAttribute("Ammo", 999) end
+            if stinger:GetAttribute("CurrentAmmo") then stinger:SetAttribute("CurrentAmmo", 999) end
+        end
+        task.wait(0.2)
     end
-    Rayfield:Notify({Title = "AirDrop", Text = "Сбор " .. #list .. " дропов...", Duration = 2})
-    for _, part in ipairs(list) do
-        safeTeleport(part.Position + Vector3.new(0, 5, 0))
+end
+
+-- ============================================
+-- JAVELIN СПАМ
+-- ============================================
+local function javelinLoop()
+    while state.javelin do
+        local wep = getWeapon("Javelin")
+        if not wep then task.wait(0.5) continue end
+        for _, target in ipairs(getPlayers()) do
+            if not state.javelin then break end
+            task.spawn(function() pcall(fireAtPart, target, wep, "Javelin") end)
+        end
+        task.wait(0.1)
+    end
+end
+
+-- ============================================
+-- TARGET ALL BASE
+-- ============================================
+local function getAllBaseTargets()
+    local targets = {}
+    local ignore = state.excludedBases or {}
+    local function isIgnored(obj)
+        if #ignore == 0 then return false end
+        local current = obj
+        for _ = 1, 10 do
+            if not current then break end
+            for _, name in ipairs(ignore) do
+                if current.Name == name or current.Name:find(name) then
+                    return true
+                end
+            end
+            current = current.Parent
+        end
+        return false
+    end
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        local name = obj.Name
+        if name:match("^Effect") or name == "Base Shield" or name == "CRAM" or name == "ElectricalBox" or name == "Spawn Visualizer" then
+            if not isIgnored(obj) then
+                local attackPos = nil
+                if obj:IsA("BasePart") then attackPos = obj.Position
+                else
+                    local part = obj:FindFirstChildWhichIsA("BasePart")
+                    if part then attackPos = part.Position end
+                end
+                if attackPos then table.insert(targets, attackPos) end
+            end
+        end
+    end
+    return targets
+end
+
+local function targetAllLoop()
+    while state.targetAll do
+        local wep = getRPGWeapon()
+        if not wep then task.wait(0.5) continue end
+        for _, pos in ipairs(getAllBaseTargets()) do
+            if not state.targetAll then break end
+            task.spawn(function()
+                pcall(function()
+                    fireAtPart({Position = pos}, wep, "TargetAll")
+                end)
+            end)
+        end
+        task.wait(4)
+    end
+end
+
+-- ============================================
+-- OIL (нефтяные бочки)
+-- ============================================
+local function getOilBarrels()
+    local barrels = {}
+    local gs = Workspace:FindFirstChild("Game Systems")
+    if not gs then return barrels end
+    local cw = gs:FindFirstChild("Collectibles Workspace")
+    if not cw then return barrels end
+    local of = cw:FindFirstChild("OilBarrel")
+    if not of then return barrels end
+    for _, v in pairs(of:GetChildren()) do
+        local p = nil
+        if v:IsA("BasePart") then p = v.Position
+        elseif v:IsA("Model") then
+            local prim = v:FindFirstChild("PrimaryPart") or v:FindFirstChildWhichIsA("BasePart")
+            if prim then p = prim.Position end
+        end
+        if p then table.insert(barrels, p) end
+    end
+    return barrels
+end
+
+local function getSellPosition()
+    for _, tycoon in pairs(Workspace.Tycoon.Tycoons:GetChildren()) do
+        if tycoon:FindFirstChild("Owner") and tycoon.Owner.Value == lp then
+            local oc = tycoon:FindFirstChild("Essentials") and tycoon.Essentials:FindFirstChild("Oil Collector")
+            if oc then
+                local plane = oc:FindFirstChild("Collector") and oc.Collector:FindFirstChild("Plane")
+                if plane then
+                    return plane.CFrame * CFrame.new(0, 3, 0)
+                end
+            end
+            break
+        end
+    end
+    local spawn = Workspace:FindFirstChild("SpawnLocation")
+    if spawn then return spawn.CFrame * CFrame.new(0, 3, 0) end
+    return nil
+end
+
+local function oilLoop()
+    while state.autoOil do
+        local barrels = getOilBarrels()
+        if #barrels == 0 then task.wait(1) continue end
+        local sellPos = getSellPosition()
+        for _, pos in ipairs(barrels) do
+            if not state.autoOil then break end
+            local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+            if not root then break end
+            root.CFrame = CFrame.new(pos)
+            task.wait(0.5)
+            pressE()
+            task.wait(7)
+            if sellPos then
+                root.CFrame = sellPos
+                task.wait(0.5)
+                pressE()
+                task.wait(7)
+            end
+            task.wait(0.5)
+        end
         task.wait(0.5)
     end
-    Rayfield:Notify({Title = "AirDrop", Text = "Сбор завершён!", Duration = 2})
 end
 
-local function startAutoAirdrop()
-    if autoAirdropLoop then return end
-    autoAirdropActive = true
-    autoAirdropLoop = task.spawn(function()
-        while autoAirdropActive do
-            local list = getAllAirdrops()
-            if #list > 0 then
-                for _, part in ipairs(list) do
-                    if not autoAirdropActive then break end
-                    safeTeleport(part.Position + Vector3.new(0, 5, 0))
-                    task.wait(0.5)
-                end
+local function collectOilOnce()
+    task.spawn(function()
+        local barrels = getOilBarrels()
+        if #barrels == 0 then
+            Library:Notify({ Title = "Oil", Text = "Бочек не найдено", Duration = 2 })
+            return
+        end
+        local sellPos = getSellPosition()
+        for _, pos in ipairs(barrels) do
+            local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+            if not root then break end
+            root.CFrame = CFrame.new(pos)
+            task.wait(0.5)
+            pressE()
+            task.wait(7)
+            if sellPos then
+                root.CFrame = sellPos
+                task.wait(0.5)
+                pressE()
+                task.wait(7)
             end
-            task.wait(2)
+            task.wait(0.5)
+        end
+        Library:Notify({ Title = "Oil", Text = "Сбор завершён", Duration = 2 })
+    end)
+end
+
+-- ============================================
+-- AIRDROP
+-- ============================================
+local function getAirdrops()
+    local drops = {}
+    local gs = Workspace:FindFirstChild("Game Systems")
+    if not gs then return drops end
+    local cw = gs:FindFirstChild("Collectibles Workspace")
+    if not cw then return drops end
+    local ad = cw:FindFirstChild("AirDrop")
+    if not ad then return drops end
+    for _, v in pairs(ad:GetChildren()) do
+        if v.Name:match("^Airdrop_") then
+            local main = nil
+            local parts = v:FindFirstChild("Parts")
+            if parts then main = parts:FindFirstChild("MainPart") end
+            if not main then main = v:FindFirstChild("MainPart") end
+            if main and main:IsA("BasePart") then
+                table.insert(drops, main.Position)
+            end
+        end
+    end
+    return drops
+end
+
+local function airdropLoop()
+    while state.autoAirdrop do
+        local drops = getAirdrops()
+        if #drops > 0 then
+            for _, pos in ipairs(drops) do
+                if not state.autoAirdrop then break end
+                teleportTo(pos + Vector3.new(0, 5, 0))
+                task.wait(0.5)
+            end
+        end
+        task.wait(2)
+    end
+end
+
+local function collectAirdropOnce()
+    task.spawn(function()
+        local drops = getAirdrops()
+        if #drops == 0 then
+            Library:Notify({ Title = "Airdrop", Text = "Дропов не найдено", Duration = 2 })
+            return
+        end
+        for _, pos in ipairs(drops) do
+            teleportTo(pos + Vector3.new(0, 5, 0))
+            task.wait(0.5)
+        end
+        Library:Notify({ Title = "Airdrop", Text = "Сбор завершён", Duration = 2 })
+    end)
+end
+
+-- ============================================
+-- PARTS COORDINATES
+-- ============================================
+local PANTSIR_PARTS = {
+    Vector3.new(-2454.871337890625, 106.02146911621094, -3370.7158203125),
+    Vector3.new(-1489.362060546875, 65.2723388671875, -2948.718505859375),
+    Vector3.new(408.7166442871094, 73.965576171875, 1206.142578125),
+    Vector3.new(-989.474365234375, 71.20712280273438, 132.05018615722656),
+    Vector3.new(-197.655517578125, 80.95536041259766, -1270.05322265625)
+}
+local M1117_PARTS = {
+    Vector3.new(-1734.155029296875, 67.62936401367188, -1651.9326171875),
+    Vector3.new(-97.77346801757812, 65.99736785888672, 2059.955078125),
+    Vector3.new(-1082.1163330078125, 68.55886840820312, -1007.572265625),
+    Vector3.new(-482.6784362792969, 70.69316864013672, -2242.6875)
+}
+local NEW_PARTS = {
+    Vector3.new(-2286.727294921875, 76.9549789428711, -2494.11279296875),
+    Vector3.new(-1505.368408203125, 68.35636901855469, -2889.120361328125),
+    Vector3.new(414.3441162109375, 70.91244506835938, -1057.1551513671875),
+    Vector3.new(1312.33056640625, 70.9555892944336, 609.2532348632812),
+    Vector3.new(-504.4781799316406, 173.98941040039062, -1023.0531616210938)
+}
+
+-- ============================================
+-- UTILITY FUNCTIONS
+-- ============================================
+local function loadInfiniteYield()
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+    Library:Notify({ Title = "Infinite Yield", Text = "Загружен", Duration = 3 })
+end
+
+local function deleteAntiCheat()
+    local deleted = 0
+    local function del(name)
+        for _, obj in pairs(game:GetDescendants()) do
+            if obj.Name == name then
+                pcall(function() obj:Destroy() end)
+                deleted = deleted + 1
+            end
+        end
+    end
+    del("OxygenBar")
+    del("Knit")
+    del("OxygenService")
+    del("InterfaceController")
+    Library:Notify({ Title = "AntiCheat", Text = "Удалено объектов: " .. deleted, Duration = 3 })
+end
+
+local function noFallDamage()
+    local freefall = RS:FindFirstChild("Freefall")
+    if freefall then freefall:Destroy() end
+    local acsEngine = RS:FindFirstChild("ACS_Engine")
+    if acsEngine and acsEngine:FindFirstChild("Events") then
+        local fdmg = acsEngine.Events:FindFirstChild("FDMG")
+        if fdmg then fdmg:Destroy() end
+    end
+    local char = lp.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.BreakJointsOnDeath = false
+    end
+    Library:Notify({ Title = "No Fall", Text = "Готово", Duration = 2 })
+end
+
+-- ============================================
+-- СОЗДАНИЕ GUI (ZalupaLib)
+-- ============================================
+local Window = Library:CreateWindow({
+    Title = "Full Hub",
+    Subtitle = "ZalupaLib Edition",
+    Theme = "Blue"
+})
+
+-- Вкладка MAIN (RPG)
+local MainTab = Window:CreateTab({ Name = "Main" })
+
+MainTab:CreateSection("RPG")
+MainTab:CreateToggle({
+    Name = "Infinite Ammo (RPG)",
+    Default = false,
+    Callback = function(v)
+        state.infiniteAmmoRPG = v
+    end
+})
+MainTab:CreateToggle({
+    Name = "Attack Players",
+    Default = false,
+    Callback = function(v)
+        state.attackPlayers = v
+        manageThread("rpg", rpgLoop, v or state.attackShields)
+    end
+})
+MainTab:CreateToggle({
+    Name = "Attack Shields",
+    Default = false,
+    Callback = function(v)
+        state.attackShields = v
+        manageThread("rpg", rpgLoop, v or state.attackPlayers)
+    end
+})
+
+MainTab:CreateSection("Stinger")
+MainTab:CreateToggle({
+    Name = "Stinger Spam",
+    Default = false,
+    Callback = function(v)
+        state.stinger = v
+        manageThread("stinger", stingerLoop, v)
+    end
+})
+MainTab:CreateToggle({
+    Name = "Infinite Stinger Ammo",
+    Default = false,
+    Callback = function(v)
+        state.infiniteStinger = v
+        manageThread("infiniteStinger", infiniteStingerLoop, v)
+    end
+})
+
+MainTab:CreateSection("Javelin")
+MainTab:CreateToggle({
+    Name = "Javelin Spam",
+    Default = false,
+    Callback = function(v)
+        state.javelin = v
+        manageThread("javelin", javelinLoop, v)
+    end
+})
+
+MainTab:CreateSection("Target All Base")
+MainTab:CreateToggle({
+    Name = "Target All Base",
+    Default = false,
+    Callback = function(v)
+        state.targetAll = v
+        manageThread("targetAll", targetAllLoop, v)
+    end
+})
+MainTab:CreateButton({
+    Name = "Set Excluded Bases",
+    Callback = function()
+        Window:Dialog({
+            Title = "Exclude Bases",
+            Content = "Введите названия баз через запятую (например: Alpha,Bravo)",
+            Buttons = {
+                {
+                    Title = "OK",
+                    Callback = function(input)
+                        local text = input or ""
+                        state.excludedBases = {}
+                        if text ~= "" then
+                            for _, name in ipairs(string.split(text, ",")) do
+                                local trimmed = name:gsub("^%s*(.-)%s*$", "%1")
+                                if trimmed ~= "" then table.insert(state.excludedBases, trimmed) end
+                            end
+                        end
+                        Library:Notify({
+                            Title = "Excluded Bases",
+                            Text = "Установлено: " .. (#state.excludedBases > 0 and table.concat(state.excludedBases, ", ") or "пусто"),
+                            Duration = 3
+                        })
+                    end
+                },
+                {
+                    Title = "Cancel",
+                    Callback = function() end
+                }
+            }
+        })
+    end
+})
+
+-- Вкладка FARM
+local FarmTab = Window:CreateTab({ Name = "Farm" })
+
+FarmTab:CreateSection("Oil Barrels")
+FarmTab:CreateToggle({
+    Name = "Auto Oil (Loop)",
+    Default = false,
+    Callback = function(v)
+        state.autoOil = v
+        manageThread("oil", oilLoop, v)
+    end
+})
+FarmTab:CreateButton({
+    Name = "Collect Oil (Once)",
+    Callback = collectOilOnce
+})
+
+FarmTab:CreateSection("Airdrop")
+FarmTab:CreateToggle({
+    Name = "Auto Airdrop (Loop)",
+    Default = false,
+    Callback = function(v)
+        state.autoAirdrop = v
+        manageThread("airdrop", airdropLoop, v)
+    end
+})
+FarmTab:CreateButton({
+    Name = "Collect Airdrop (Once)",
+    Callback = collectAirdropOnce
+})
+
+-- Вкладка PARTS
+local PartsTab = Window:CreateTab({ Name = "Parts" })
+
+local function addPartSection(title, parts)
+    PartsTab:CreateSection(title)
+    for i, pos in ipairs(parts) do
+        PartsTab:CreateButton({
+            Name = "Часть " .. i,
+            Callback = function() teleportTo(pos) end
+        })
+    end
+end
+
+addPartSection("Pantsir S1", PANTSIR_PARTS)
+addPartSection("M1117", M1117_PARTS)
+addPartSection("New Parts", NEW_PARTS)
+
+-- Вкладка UTILITY
+local UtilityTab = Window:CreateTab({ Name = "Utility" })
+
+UtilityTab:CreateSection("Tools")
+UtilityTab:CreateButton({
+    Name = "Load Infinite Yield",
+    Callback = loadInfiniteYield
+})
+UtilityTab:CreateButton({
+    Name = "Delete AntiCheat",
+    Callback = deleteAntiCheat
+})
+UtilityTab:CreateButton({
+    Name = "No Fall Damage",
+    Callback = noFallDamage
+})
+
+-- ============================================
+-- ЗАПУСК ОБРАБОТЧИКОВ (для RPG при появлении)
+-- ============================================
+local function onCharacterAdded(character)
+    character.ChildAdded:Connect(function(child)
+        if child.Name == "RPG" then
+            Library:Notify({Title = "RPG", Text = "Обнаружен", Duration = 2})
+            -- цикл стрельбы уже есть в rpgLoop, но этот блок можно убрать, т.к. мы используем manageThread
+            -- оставим только уведомление
         end
     end)
-    Rayfield:Notify({Title = "AirDrop", Text = "Автосбор включён", Duration = 2})
 end
 
-local function stopAutoAirdrop()
-    autoAirdropActive = false
-    if autoAirdropLoop then
-        task.cancel(autoAirdropLoop)
-        autoAirdropLoop = nil
-    end
-    Rayfield:Notify({Title = "AirDrop", Text = "Автосбор выключен", Duration = 2})
-end
+lp.CharacterAdded:Connect(onCharacterAdded)
+onCharacterAdded(lp.Character or lp.CharacterAdded:Wait())
 
--- ======= СОЗДАНИЕ ВКЛАДОК =======
-local AutoFarmTab = Window:CreateTab("Main Farm", nil)
-local ActionsTab = Window:CreateTab("Actions", nil)
-local CombatTab = Window:CreateTab("Combat", nil)
-local PartsTab = Window:CreateTab("Parts", nil)
-local UtilityTab = Window:CreateTab("Utility", nil)
-
--- ======= Main Farm =======
-AutoFarmTab:CreateToggle({
-    Name = "Enable Main Farm",
-    CurrentValue = false,
-    Flag = "AutoFarm",
-    Callback = function(Value)
-        Configuration.Farm.AutoBuy = Value
-        Configuration.Farm.RecupMonay = Value
-        if Value then startAutoFarm() else isFarming = false end
-    end,
+-- Уведомление о загрузке
+Library:Notify({
+    Title = "Full Hub",
+    Text = "Загружен (ZalupaLib)",
+    Duration = 4
 })
 
--- ======= Actions =======
-ActionsTab:CreateButton({
-    Name = "TP / Return Capture Point",
-    Callback = function()
-        local root = getRoot()
-        if not capPointSavedPos then
-            capPointSavedPos = root.CFrame
-            root.CFrame = CFrame.new(Configuration.CapturePoint)
-        else
-            root.CFrame = capPointSavedPos
-            capPointSavedPos = nil
-        end
-    end,
-})
-
-ActionsTab:CreateToggle({
-    Name = "Auto Oil Barrels (Loop)",
-    CurrentValue = false,
-    Flag = "OilBarrelsToggle",
-    Callback = function(Value)
-        collectingBarrels = Value
-        if Value then
-            task.spawn(collectBarrelsLoop)
-        end
-    end,
-})
-
-ActionsTab:CreateButton({
-    Name = "Collect All Airdrops (once)",
-    Callback = function()
-        collectAllAirdrops()
-    end,
-})
-
-ActionsTab:CreateToggle({
-    Name = "Auto Airdrop (loop)",
-    CurrentValue = false,
-    Flag = "AutoAirdrop",
-    Callback = function(Value)
-        if Value then
-            startAutoAirdrop()
-        else
-            stopAutoAirdrop()
-        end
-    end,
-})
-
--- ======= Combat (добавлен Attack Shields) =======
-CombatTab:CreateToggle({
-    Name = "Enable RPG Spam (Players)",
-    CurrentValue = false,
-    Flag = "RPGSpamPlayers",
-    Callback = function(Value)
-        attackPlayers = Value
-        if not (attackPlayers or attackShields) then return end
-        task.spawn(function()
-            while attackPlayers or attackShields do
-                startRPGSpam()
-                task.wait(0.1)
-            end
-        end)
-    end,
-})
-
-CombatTab:CreateToggle({
-    Name = "Attack Shields",
-    CurrentValue = false,
-    Flag = "RPGSpamShields",
-    Callback = function(Value)
-        attackShields = Value
-        if not (attackPlayers or attackShields) then return end
-        task.spawn(function()
-            while attackPlayers or attackShields do
-                startRPGSpam()
-                task.wait(0.1)
-            end
-        end)
-    end,
-})
-
-CombatTab:CreateTextBox({
-    Name = "Exclude Players (comma separated)",
-    PlaceholderText = "Player1,Player2,Player3",
-    RemoveTextAfterFocusLost = false,
-    CurrentValue = "",
-    Flag = "ExcludePlayers",
-    Callback = function(Value)
-        excludedPlayers = {}
-        if Value and Value ~= "" then
-            for _, name in ipairs(string.split(Value, ",")) do
-                local trimmed = name:gsub("^%s*(.-)%s*$", "%1")
-                if trimmed ~= "" then
-                    table.insert(excludedPlayers, trimmed)
-                end
-            end
-        end
-        Rayfield:Notify({Title = "Exceptions", Text = "Обновлено: " .. #excludedPlayers .. " игроков", Duration = 2})
-    end,
-})
-
--- ======= Parts (исправлен) =======
-PartsTab:CreateSection("Pantsir S1")
-for i, pos in ipairs(PANTSIR_PARTS) do
-    PartsTab:CreateButton({
-        Name = "Запчасть " .. i,
-        Callback = function()
-            safeTeleport(pos)
-        end,
-    })
-end
-
-PartsTab:CreateSection("M1117")
-for i, pos in ipairs(M1117_PARTS) do
-    PartsTab:CreateButton({
-        Name = "M1117 " .. i,
-        Callback = function()
-            safeTeleport(pos)
-        end,
-    })
-end
-
-PartsTab:CreateSection("Maus")
-for i, pos in ipairs(MAUS_PARTS) do
-    PartsTab:CreateButton({
-        Name = "Maus " .. i,
-        Callback = function()
-            safeTeleport(pos)
-        end,
-    })
-end
-
-PartsTab:CreateSection("Center")
-PartsTab:CreateButton({
-    Name = "Teleport to Center",
-    Callback = function()
-        safeTeleportCFrame(CENTER_CFRAME)
-    end,
-})
-
--- ======= Utility =======
-UtilityTab:CreateButton({
-    Name = "Infinite Yield",
-    Callback = function()
-        loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
-        Rayfield:Notify({Title = "Infinite Yield", Text = "Запущен!", Duration = 2})
-    end,
-})
-
--- ======= ЗАПУСК =======
-Rayfield:LoadConfiguration()
-
-print("Pantsir S1 Hub loaded! (v2.4 — Parts исправлены, добавлены Shields)")
+print("[ZalupaLib] Full Hub loaded.")
