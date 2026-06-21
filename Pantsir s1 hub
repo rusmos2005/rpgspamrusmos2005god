@@ -1,6 +1,6 @@
 -- ============================================
 -- Pantsir S1 Hub (Rayfield) - Mobile-Ready
--- Исправлен спам для телефонов
+-- Исправлен поиск коробок (рекурсивный)
 -- ============================================
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -92,7 +92,7 @@ local function getWeapon(name)
 end
 
 -- ============================================
--- ФУНКЦИЯ ДЛЯ ПОИСКА PROXIMITYPROMPT РЯДОМ (для фарма)
+-- ФУНКЦИЯ ДЛЯ ПОИСКА PROXIMITYPROMPT РЯДОМ
 -- ============================================
 local function getPromptAtPosition(pos, radius)
     radius = radius or 15
@@ -124,7 +124,7 @@ local function holdEOnPrompt(prompt, duration)
 end
 
 -- ============================================
--- ОСНОВНЫЕ БОЕВЫЕ ФУНКЦИИ (без привязки к ChildAdded)
+-- RPG СПАМ + Infinite Ammo
 -- ============================================
 local function getRPGWeapon() return getWeapon("RPG") end
 
@@ -184,9 +184,7 @@ local function fireAtPart(part, child, label)
     })
 end
 
--- ============================================
--- RPG СПАМ (работает без ChildAdded)
--- ============================================
+-- RPG Loop
 local function rpgLoop()
     while state.attackPlayers or state.attackShields do
         local wep = getRPGWeapon()
@@ -210,7 +208,6 @@ local function rpgLoop()
     end
 end
 
--- Infinite Ammo RPG (без изменений)
 task.spawn(function()
     while task.wait() do
         if state.infiniteAmmoRPG then
@@ -225,9 +222,7 @@ task.spawn(function()
     end
 end)
 
--- ============================================
--- STINGER СПАМ
--- ============================================
+-- STINGER
 local function stingerLoop()
     while state.stinger do
         local wep = getWeapon("Stinger")
@@ -258,9 +253,7 @@ local function infiniteStingerLoop()
     end
 end
 
--- ============================================
--- JAVELIN СПАМ
--- ============================================
+-- JAVELIN
 local function javelinLoop()
     while state.javelin do
         local wep = getWeapon("Javelin")
@@ -276,9 +269,7 @@ local function javelinLoop()
     end
 end
 
--- ============================================
--- TARGET ALL BASE
--- ============================================
+-- TARGET ALL
 local function targetAllLoop()
     while state.targetAll do
         local wep = getRPGWeapon()
@@ -309,8 +300,10 @@ local function targetAllLoop()
 end
 
 -- ============================================
--- ФУНКЦИИ ФАРМА (без изменений, уже исправлены)
+-- ФУНКЦИИ ПОИСКА ДЛЯ ФАРМА
 -- ============================================
+
+-- БОЧКИ (по папке OilBarrel)
 local function findAllOilBarrels()
     local barrels = {}
     local gs = Workspace:FindFirstChild("Game Systems")
@@ -332,33 +325,35 @@ local function findAllOilBarrels()
     return barrels
 end
 
+-- КОРОБКИ (рекурсивный поиск по "crate")
 local function findAllCrates()
     local crates = {}
     local gs = Workspace:FindFirstChild("Game Systems")
     if not gs then return crates end
 
-    local crateFolder = nil
-    for _, child in pairs(gs:GetChildren()) do
-        local name = child.Name:lower()
-        if name:find("crate") or name:find("partcrate") then
-            crateFolder = child
-            break
+    local function scan(parent)
+        for _, child in pairs(parent:GetChildren()) do
+            if child.Name:lower():find("crate") then
+                local pos = nil
+                if child:IsA("BasePart") then
+                    pos = child.Position
+                elseif child:IsA("Model") then
+                    local prim = child:FindFirstChild("PrimaryPart") or child:FindFirstChildWhichIsA("BasePart")
+                    if prim then pos = prim.Position end
+                end
+                if pos then
+                    table.insert(crates, pos)
+                end
+            end
+            scan(child)
         end
     end
-    if not crateFolder then return crates end
 
-    for _, child in pairs(crateFolder:GetChildren()) do
-        local pos = nil
-        if child:IsA("BasePart") then pos = child.Position
-        elseif child:IsA("Model") then
-            local prim = child:FindFirstChild("PrimaryPart") or child:FindFirstChildWhichIsA("BasePart")
-            if prim then pos = prim.Position end
-        end
-        if pos then table.insert(crates, pos) end
-    end
+    scan(gs)
     return crates
 end
 
+-- АИРДРОПЫ (по папке AirDrop)
 local function findAllAirdrops()
     local drops = {}
     local gs = Workspace:FindFirstChild("Game Systems")
@@ -386,6 +381,9 @@ local function findAllAirdrops()
     return drops
 end
 
+-- ============================================
+-- ФУНКЦИИ СБОРА (без изменений)
+-- ============================================
 local function collectOilAuto()
     task.spawn(function()
         local sellPos = getSellPosition()
@@ -536,7 +534,6 @@ local function collectAirdropWithReset()
                 holdEOnPrompt(prompt, 6)
             end
             task.wait(0.5)
-            -- Ресет
             local char = lp.Character
             if char and char:FindFirstChild("Humanoid") then
                 char.Humanoid.Health = 0
@@ -681,7 +678,7 @@ MainTab:CreateInput({ Name = "Excluded Bases", PlaceholderText = "Alpha,Bravo", 
     end
 end })
 
--- FARM (с тогглами)
+-- FARM
 local FarmTab = Window:CreateTab("Farm", 4483362458)
 
 FarmTab:CreateSection("Oil")
@@ -725,7 +722,7 @@ UtilityTab:CreateButton({ Name = "Delete AntiCheat", Callback = deleteAntiCheat 
 UtilityTab:CreateButton({ Name = "No Fall Damage", Callback = noFallDamage })
 
 -- ============================================
--- ЗАПУСК (без ChildAdded)
+-- ЗАПУСК
 -- ============================================
-Rayfield:Notify({ Title = "Pantsir S1 Hub", Content = "Загружен! Спам работает на телефонах.", Duration = 3 })
+Rayfield:Notify({ Title = "Pantsir S1 Hub", Content = "Загружен! Коробки ищутся рекурсивно.", Duration = 3 })
 print("[Pantsir S1 Hub] Loaded successfully.")
