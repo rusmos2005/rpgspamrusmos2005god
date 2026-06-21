@@ -1,5 +1,6 @@
 -- ============================================
--- Full Hub (Rayfield) - Mobile-friendly ProximityPrompt
+-- Pantsir S1 Hub (Rayfield) - Mobile-Ready
+-- Только одноразовый сбор (без авто-циклов)
 -- ============================================
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -26,7 +27,7 @@ local rocketSettings = {
     GunshipDamage = 170, velocity = 200, ExplosionDamage = 120
 }
 
--- Состояния
+-- Состояния (только для боевых функций)
 local state = {
     attackPlayers = false,
     attackShields = false,
@@ -35,7 +36,6 @@ local state = {
     infiniteStinger = false,
     javelin = false,
     targetAll = false,
-    autoAirdrop = false,
     excludedBases = {},
 }
 
@@ -122,7 +122,7 @@ local function holdEOnPrompt(prompt, duration)
 end
 
 -- ============================================
--- RPG СПАМ + Infinite Ammo (без изменений)
+-- RPG СПАМ + Infinite Ammo
 -- ============================================
 local function getRPGWeapon() return getWeapon("RPG") end
 
@@ -285,7 +285,7 @@ local function targetAllLoop()
 end
 
 -- ============================================
--- AUTO OIL (С ПОИСКОМ PROXIMITYPROMPT)
+-- ОДНОРАЗОВЫЙ СБОР OIL
 -- ============================================
 local function findAllOilBarrels()
     local barrels = {}
@@ -328,18 +328,14 @@ local function collectOilAuto()
             task.wait(0.5)
             local prompt = getPromptAtPosition(pos)
             if prompt then
-                holdEOnPrompt(prompt, 6) -- сбор 6 секунд
-            else
-                Rayfield:Notify({ Title = "Oil", Content = "Prompt не найден для бочки " .. i, Duration = 2 })
+                holdEOnPrompt(prompt, 6)
             end
             task.wait(0.5)
             teleportTo(sellPos)
             task.wait(0.5)
             local sellPrompt = getPromptAtPosition(sellPos.Position)
             if sellPrompt then
-                holdEOnPrompt(sellPrompt, 3) -- продажа 3 секунды
-            else
-                Rayfield:Notify({ Title = "Oil", Content = "Prompt для продажи не найден", Duration = 2 })
+                holdEOnPrompt(sellPrompt, 3)
             end
             task.wait(0.5)
             Rayfield:Notify({ Title = "Oil", Content = "Обработано " .. i .. "/" .. #barrels, Duration = 2 })
@@ -349,7 +345,7 @@ local function collectOilAuto()
 end
 
 -- ============================================
--- AUTO CRATES (С PROXIMITYPROMPT)
+-- ОДНОРАЗОВЫЙ СБОР CRATES
 -- ============================================
 local function findAllCrates()
     local crates = {}
@@ -391,18 +387,14 @@ local function collectCratesAuto()
             task.wait(0.5)
             local prompt = getPromptAtPosition(pos)
             if prompt then
-                holdEOnPrompt(prompt, 6) -- сбор 6 секунд
-            else
-                Rayfield:Notify({ Title = "Crates", Content = "Prompt не найден для коробки " .. i, Duration = 2 })
+                holdEOnPrompt(prompt, 6)
             end
             task.wait(0.5)
             teleportTo(sellPos)
             task.wait(0.5)
             local sellPrompt = getPromptAtPosition(sellPos.Position)
             if sellPrompt then
-                holdEOnPrompt(sellPrompt, 3) -- продажа 3 секунды
-            else
-                Rayfield:Notify({ Title = "Crates", Content = "Prompt для продажи не найден", Duration = 2 })
+                holdEOnPrompt(sellPrompt, 3)
             end
             task.wait(0.5)
             Rayfield:Notify({ Title = "Crates", Content = "Обработано " .. i .. "/" .. #crates, Duration = 2 })
@@ -412,7 +404,7 @@ local function collectCratesAuto()
 end
 
 -- ============================================
--- AUTO AIRDROP (С PROXIMITYPROMPT + РЕСЕТ)
+-- ОДНОРАЗОВЫЙ СБОР AIRDROP + РЕСЕТ
 -- ============================================
 local function findAllAirdrops()
     local drops = {}
@@ -450,9 +442,7 @@ local function collectAirdropWithReset()
             task.wait(0.5)
             local prompt = getPromptAtPosition(pos)
             if prompt then
-                holdEOnPrompt(prompt, 6) -- сбор 6 секунд
-            else
-                Rayfield:Notify({ Title = "Airdrop", Content = "Prompt не найден для дропа " .. i, Duration = 2 })
+                holdEOnPrompt(prompt, 6)
             end
             task.wait(0.5)
             -- Ресет
@@ -465,33 +455,6 @@ local function collectAirdropWithReset()
         end
         Rayfield:Notify({ Title = "Airdrop", Content = "Готово! Собрано " .. #drops .. " дропов", Duration = 3 })
     end)
-end
-
-local function airdropLoopWithReset()
-    while state.autoAirdrop do
-        local drops = findAllAirdrops()
-        if #drops > 0 then
-            for _, pos in ipairs(drops) do
-                if not state.autoAirdrop then break end
-                teleportTo(CFrame.new(pos + Vector3.new(0, 5, 0)))
-                task.wait(0.5)
-                local prompt = getPromptAtPosition(pos)
-                if prompt then
-                    holdEOnPrompt(prompt, 6)
-                end
-                task.wait(0.5)
-                local char = lp.Character
-                if char and char:FindFirstChild("Humanoid") then
-                    char.Humanoid.Health = 0
-                    task.wait(2)
-                end
-                task.wait(0.5)
-            end
-        else
-            task.wait(2)
-        end
-        task.wait(1)
-    end
 end
 
 -- ============================================
@@ -559,16 +522,16 @@ local function noFallDamage()
 end
 
 -- ============================================
--- GUI
+-- GUI (Pantsir S1 Hub)
 -- ============================================
 local Window = Rayfield:CreateWindow({
-    Name = "Full Hub",
-    LoadingTitle = "Full Hub",
+    Name = "Pantsir S1 Hub",
+    LoadingTitle = "Pantsir S1 Hub",
     LoadingSubtitle = "Mobile-Ready",
     ConfigurationSaving = {
         Enabled = true,
-        FolderName = "GothbreachHub",
-        FileName = "FullHub"
+        FolderName = "PantsirS1Hub",
+        FileName = "Settings"
     },
     Discord = { Enabled = false },
     KeySystem = false
@@ -600,21 +563,17 @@ MainTab:CreateInput({ Name = "Excluded Bases", PlaceholderText = "Alpha,Bravo", 
     end
 end })
 
--- FARM
+-- FARM (только кнопки)
 local FarmTab = Window:CreateTab("Farm", 4483362458)
 
-FarmTab:CreateSection("Oil (Auto)")
-FarmTab:CreateButton({ Name = "Collect Oil (Auto)", Callback = collectOilAuto })
+FarmTab:CreateSection("Oil")
+FarmTab:CreateButton({ Name = "Collect Oil (Once)", Callback = collectOilAuto })
 
-FarmTab:CreateSection("Crates (Auto)")
-FarmTab:CreateButton({ Name = "Collect Crates (Auto)", Callback = collectCratesAuto })
+FarmTab:CreateSection("Crates")
+FarmTab:CreateButton({ Name = "Collect Crates (Once)", Callback = collectCratesAuto })
 
-FarmTab:CreateSection("Airdrop (Auto + Reset)")
+FarmTab:CreateSection("Airdrop")
 FarmTab:CreateButton({ Name = "Collect Airdrop (Once + Reset)", Callback = collectAirdropWithReset })
-FarmTab:CreateToggle({ Name = "Auto Airdrop (Loop + Reset)", CurrentValue = false, Flag = "AutoAirdropReset", Callback = function(v)
-    state.autoAirdrop = v
-    manageThread("airdropReset", airdropLoopWithReset, v)
-end })
 
 -- PARTS
 local PartsTab = Window:CreateTab("Parts", 4483362458)
@@ -648,5 +607,5 @@ end
 lp.CharacterAdded:Connect(onCharacterAdded)
 onCharacterAdded(lp.Character or lp.CharacterAdded:Wait())
 
-Rayfield:Notify({ Title = "Full Hub", Content = "Загружен (Mobile-Ready)", Duration = 3 })
-print("[Rayfield] Full Hub Mobile-Ready loaded.")
+Rayfield:Notify({ Title = "Pantsir S1 Hub", Content = "Загружен!", Duration = 3 })
+print("[Pantsir S1 Hub] Loaded successfully.")
