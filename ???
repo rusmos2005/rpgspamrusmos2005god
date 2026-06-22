@@ -1,8 +1,0 @@
-local Players = game:GetService("Players")
-local lp = Players.LocalPlayer
-
--- Способ 1: Кик через LocalPlayer
-local function kickPlayer(reason)
-    reason = reason or "EROR404 - Script Stopped"
-    lp:Kick(reason)
-end
