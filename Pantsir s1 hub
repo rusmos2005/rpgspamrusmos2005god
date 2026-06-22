@@ -1,6 +1,6 @@
 -- ============================================
 -- Pantsir S1 Hub (Rayfield) - Full Version
--- Защита Work.ink: требуется ключ доступа
+-- Своя ключ-система (20 ключей)
 -- ============================================
 
 local Players = game:GetService("Players")
@@ -8,18 +8,23 @@ local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 
 -- ============================================
--- ФУНКЦИЯ ПРОВЕРКИ КЛЮЧА ЧЕРЕЗ WORK.INK
+-- СПИСОК ВАЛИДНЫХ КЛЮЧЕЙ (20 штук)
 -- ============================================
+local VALID_KEYS = {
+    "KEY-001", "KEY-002", "KEY-003", "KEY-004", "KEY-005",
+    "KEY-006", "KEY-007", "KEY-008", "KEY-009", "KEY-010",
+    "KEY-011", "KEY-012", "KEY-013", "KEY-014", "KEY-015",
+    "KEY-016", "KEY-017", "KEY-018", "KEY-019", "KEY-020"
+}
+
+-- Функция проверки ключа (локальная)
 local function checkKey(key)
-    local success, response = pcall(function()
-        return game:HttpGet("https://work.ink/_api/v2/token/isValid/" .. key)
-    end)
-    if not success then
-        warn("Ошибка при проверке ключа: " .. tostring(response))
-        return false
+    for _, validKey in ipairs(VALID_KEYS) do
+        if key == validKey then
+            return true
+        end
     end
-    local data = HttpService:JSONDecode(response)
-    return data.valid == true
+    return false
 end
 
 -- ============================================
@@ -43,7 +48,7 @@ corner.CornerRadius = UDim.new(0, 12)
 local title = Instance.new("TextLabel", mainFrame)
 title.Size = UDim2.new(1, 0, 0, 40)
 title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-title.Text = "🔐 Введите ключ доступа"
+title.Text = "🔑 Введите ключ доступа"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 16
@@ -54,7 +59,7 @@ titleCorner.CornerRadius = UDim.new(0, 12)
 local keyInput = Instance.new("TextBox", mainFrame)
 keyInput.Size = UDim2.new(0.9, 0, 0, 35)
 keyInput.Position = UDim2.new(0.05, 0, 0, 50)
-keyInput.PlaceholderText = "Вставьте ключ из Work.ink"
+keyInput.PlaceholderText = "Введите ключ"
 keyInput.Text = ""
 keyInput.TextColor3 = Color3.new(1, 1, 1)
 keyInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
@@ -129,7 +134,7 @@ end)
 -- ОСНОВНОЙ СКРИПТ (загружается после проверки)
 -- ============================================
 local function loadMainScript()
-    -- (весь ваш существующий код, который был до этого)
+    -- (здесь весь ваш существующий код, который был до этого)
     -- Я скопирую его сюда, чтобы он выполнялся только после успешной проверки
     -- ============================================
     -- Pantsir S1 Hub (Rayfield) - Full Version
