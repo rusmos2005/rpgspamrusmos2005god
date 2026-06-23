@@ -992,4 +992,4 @@ UtilityTab:CreateButton({ Name = "No Fall Damage", Callback = noFallDamage })
 -- ЗАПУСК
 -- ============================================
 Rayfield:Notify({ Title = "Pantsir S1 Hub", Content = "Загружен! Бесконечные патроны только для RPG.", Duration = 3 })
-print("[Pantsir S1 Hub] Loaded successfully.") добавь сюда ключь систему
+print("[Pantsir S1 Hub] Loaded successfully.")
