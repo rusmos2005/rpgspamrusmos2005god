@@ -1,10 +1,10 @@
 -- ============================================
--- ЗАГРУЗКА БИБЛИОТЕКИ RAYFIELD
+-- ЗАГРУЗКА БИБЛИОТЕКИ MACLIB
 -- ============================================
-local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/x2Swiftz/UI-Library/main/Libraries/Rayfield%20-%20Library.lua"))()
+local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
 
 -- ============================================
--- ОСНОВНАЯ ЛОГИКА (без изменений)
+-- ОСНОВНАЯ ЛОГИКА (БЕЗ ИЗМЕНЕНИЙ)
 -- ============================================
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -497,7 +497,7 @@ end
 local function teleportToCenter()
     local centerCF = CFrame.new(-504.47818, 178.98941, -1023.05316, 0.707134247, 0, -0.707079291, 0, -1, -0, -0.707079291, 0, -0.707134247)
     teleportTo(centerCF)
-    Rayfield:Notify({ Title = "Teleport", Content = "Центр", Duration = 2 })
+    Window:Notify({ Title = "Teleport", Description = "Центр", Lifetime = 2 })
 end
 
 local function findAllDrones()
@@ -553,7 +553,7 @@ end
 local function checkRebirthsAndNotify()
     local rebirths = getRebirths()
     if rebirths < 8 then
-        Rayfield:Notify({ Title = "Drones", Content = "Нужно 8+ перерождений. У вас: " .. rebirths, Duration = 4 })
+        Window:Notify({ Title = "Drones", Description = "Нужно 8+ перерождений. У вас: " .. rebirths, Lifetime = 4 })
         return false
     end
     return true
@@ -789,7 +789,7 @@ local NEW_PARTS = {
 
 local function loadInfiniteYield()
     loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
-    Rayfield:Notify({ Title = "Infinite Yield", Content = "Загружен", Duration = 2 })
+    Window:Notify({ Title = "Infinite Yield", Description = "Загружен", Lifetime = 2 })
 end
 
 local function deleteAntiCheat()
@@ -806,7 +806,7 @@ local function deleteAntiCheat()
     del("Knit")
     del("OxygenService")
     del("InterfaceController")
-    Rayfield:Notify({ Title = "AntiCheat", Content = "Удалено: " .. deleted, Duration = 2 })
+    Window:Notify({ Title = "AntiCheat", Description = "Удалено: " .. deleted, Lifetime = 2 })
 end
 
 local function noFallDamage()
@@ -821,210 +821,203 @@ local function noFallDamage()
     if char and char:FindFirstChild("Humanoid") then
         char.Humanoid.BreakJointsOnDeath = false
     end
-    Rayfield:Notify({ Title = "No Fall", Content = "Готово", Duration = 2 })
+    Window:Notify({ Title = "No Fall", Description = "Готово", Lifetime = 2 })
 end
 
 -- ============================================
--- СОЗДАНИЕ GUI (RAYFIELD)
+-- СОЗДАНИЕ GUI (MACLIB)
 -- ============================================
-local Window = Rayfield:CreateWindow({
-    Name = "Pantsir S1 Hub",
-    LoadingTitle = "Pantsir S1 Hub",
-    LoadingSubtitle = "Full Version",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "PantsirS1Hub",
-        FileName = "Settings"
-    },
-    Discord = {
-        Enabled = false
-    },
-    KeySystem = false
+local Window = MacLib:Window({
+    Title = "Pantsir S1 Hub",
+    Subtitle = "Full Version",
+    Size = UDim2.fromOffset(580, 460),
+    DragStyle = 1,
+    DisabledWindowControls = {},
+    ShowUserInfo = true,
+    Keybind = Enum.KeyCode.RightControl,
+    AcrylicBlur = true,
 })
 
+-- Группа вкладок
+local tabGroup = Window:TabGroup()
+
 -- Создаём вкладки
-local MainTab = Window:CreateTab("Main", 4483362458)
-local FarmTab = Window:CreateTab("Farm", 4483362458)
-local PartsTab = Window:CreateTab("Parts", 4483362458)
-local UtilityTab = Window:CreateTab("Utility", 4483362458)
+local MainTab = tabGroup:Tab({ Name = "Main", Image = "rbxassetid://4483362458" })
+local FarmTab = tabGroup:Tab({ Name = "Farm", Image = "rbxassetid://4483362458" })
+local PartsTab = tabGroup:Tab({ Name = "Parts", Image = "rbxassetid://4483362458" })
+local UtilityTab = tabGroup:Tab({ Name = "Utility", Image = "rbxassetid://4483362458" })
+
+-- Секции
+local mainSection = MainTab:Section({ Side = "Left" })
+local farmSection = FarmTab:Section({ Side = "Left" })
+local partsSection = PartsTab:Section({ Side = "Left" })
+local utilitySection = UtilityTab:Section({ Side = "Left" })
 
 -- ===== MAIN TAB =====
-MainTab:CreateSection("RPG")
+mainSection:Header({ Name = "RPG" })
 
-MainTab:CreateToggle({
+mainSection:Toggle({
     Name = "Infinite Ammo (RPG)",
-    CurrentValue = false,
-    Flag = "InfiniteAmmoRPG",
+    Default = false,
     Callback = function(v)
         state.infiniteAmmoRPG = v
     end
-})
+}, "InfiniteAmmoRPG")
 
-MainTab:CreateToggle({
+mainSection:Toggle({
     Name = "Attack Players",
-    CurrentValue = false,
-    Flag = "RPGPlayers",
+    Default = false,
     Callback = function(v)
         state.attackPlayers = v
         manageThread("rpg", rpgLoop, v or state.attackShields)
     end
-})
+}, "RPGPlayers")
 
-MainTab:CreateToggle({
+mainSection:Toggle({
     Name = "Attack Shields",
-    CurrentValue = false,
-    Flag = "RPGShields",
+    Default = false,
     Callback = function(v)
         state.attackShields = v
         manageThread("rpg", rpgLoop, v or state.attackPlayers)
     end
-})
+}, "RPGShields")
 
-MainTab:CreateSection("Speed Hack")
+mainSection:Header({ Name = "Speed Hack" })
 
-MainTab:CreateToggle({
+mainSection:Toggle({
     Name = "Enable Speed Hack",
-    CurrentValue = false,
-    Flag = "SpeedHackEnabled",
+    Default = false,
     Callback = function(v)
         state.speedHackEnabled = v
         updateSpeed()
     end
-})
+}, "SpeedHackEnabled")
 
-MainTab:CreateSlider({
+mainSection:Slider({
     Name = "Speed Value",
-    Range = {16, 200},
-    Increment = 1,
-    CurrentValue = state.speedHackSpeed,
-    Flag = "SpeedHackSpeed",
+    Default = 50,
+    Minimum = 16,
+    Maximum = 200,
+    DisplayMethod = "Value",
+    Precision = 0,
     Callback = function(v)
         state.speedHackSpeed = v
         if state.speedHackEnabled then
             updateSpeed()
         end
     end
-})
+}, "SpeedHackSpeed")
 
-MainTab:CreateSection("Stinger")
+mainSection:Header({ Name = "Stinger" })
 
-MainTab:CreateToggle({
+mainSection:Toggle({
     Name = "Stinger Spam",
-    CurrentValue = false,
-    Flag = "StingerSpam",
+    Default = false,
     Callback = function(v)
         state.stinger = v
         manageThread("stinger", stingerLoop, v)
     end
-})
+}, "StingerSpam")
 
-MainTab:CreateSection("Javelin")
+mainSection:Header({ Name = "Javelin" })
 
-MainTab:CreateToggle({
+mainSection:Toggle({
     Name = "Javelin Spam",
-    CurrentValue = false,
-    Flag = "JavelinSpam",
+    Default = false,
     Callback = function(v)
         state.javelin = v
         manageThread("javelin", javelinLoop, v)
     end
-})
+}, "JavelinSpam")
 
-MainTab:CreateSection("Explosion Sniper")
+mainSection:Header({ Name = "Explosion Sniper" })
 
-MainTab:CreateToggle({
+mainSection:Toggle({
     Name = "Explosion Sniper Spam",
-    CurrentValue = false,
-    Flag = "ExplosionSniper",
+    Default = false,
     Callback = function(v)
         state.explosionSniper = v
         manageThread("explosionSniper", explosionSniperLoop, v)
     end
-})
+}, "ExplosionSniper")
 
-MainTab:CreateSection("Target All Base")
+mainSection:Header({ Name = "Target All Base" })
 
-MainTab:CreateToggle({
+mainSection:Toggle({
     Name = "Target All Base",
-    CurrentValue = false,
-    Flag = "TargetAll",
+    Default = false,
     Callback = function(v)
         state.targetAll = v
         manageThread("targetAll", targetAllLoop, v)
     end
-})
+}, "TargetAll")
 
 -- ===== FARM TAB =====
-FarmTab:CreateSection("Oil")
+farmSection:Header({ Name = "Oil" })
 
-FarmTab:CreateToggle({
+farmSection:Toggle({
     Name = "Auto Oil (Loop)",
-    CurrentValue = false,
-    Flag = "AutoOil",
+    Default = false,
     Callback = function(v)
         state.autoOil = v
         manageThread("oilLoop", oilLoop, v)
     end
-})
+}, "AutoOil")
 
-FarmTab:CreateSection("Crates")
+farmSection:Header({ Name = "Crates" })
 
-FarmTab:CreateToggle({
+farmSection:Toggle({
     Name = "Auto Crates (Loop)",
-    CurrentValue = false,
-    Flag = "AutoCrates",
+    Default = false,
     Callback = function(v)
         state.autoCrates = v
         manageThread("cratesLoop", cratesLoop, v)
     end
-})
+}, "AutoCrates")
 
-FarmTab:CreateSection("Airdrop")
+farmSection:Header({ Name = "Airdrop" })
 
-FarmTab:CreateToggle({
+farmSection:Toggle({
     Name = "Auto Airdrop (Loop + Reset)",
-    CurrentValue = false,
-    Flag = "AutoAirdropReset",
+    Default = false,
     Callback = function(v)
         state.autoAirdrop = v
         manageThread("airdropLoop", airdropLoopWithReset, v)
     end
-})
+}, "AutoAirdropReset")
 
-FarmTab:CreateSection("Drones")
+farmSection:Header({ Name = "Drones" })
 
-autoDronesToggle = FarmTab:CreateToggle({
+autoDronesToggle = farmSection:Toggle({
     Name = "Auto Drones (Loop)",
-    CurrentValue = false,
-    Flag = "AutoDrones",
+    Default = false,
     Callback = function(v)
         state.autoDrones = v
         manageThread("dronesLoop", dronesLoop, v)
     end
-})
+}, "AutoDrones")
 
-FarmTab:CreateSection("Auto Tycoon")
+farmSection:Header({ Name = "Auto Tycoon" })
 
-FarmTab:CreateToggle({
+farmSection:Toggle({
     Name = "Auto Tycoon (Loop)",
-    CurrentValue = false,
-    Flag = "AutoTycoon",
+    Default = false,
     Callback = function(v)
         state.autoTycoon = v
         manageThread("tycoonLoop", tycoonLoop, v)
     end
-})
+}, "AutoTycoon")
 
-FarmTab:CreateButton({
+farmSection:Button({
     Name = "Teleport Center",
     Callback = teleportToCenter
 })
 
 -- ===== PARTS TAB =====
 local function addPartSection(title, parts)
-    PartsTab:CreateSection(title)
+    partsSection:Header({ Name = title })
     for i, pos in ipairs(parts) do
-        PartsTab:CreateButton({
+        partsSection:Button({
             Name = "Часть " .. i,
             Callback = function()
                 teleportTo(CFrame.new(pos))
@@ -1038,19 +1031,19 @@ addPartSection("M1117", M1117_PARTS)
 addPartSection("New Parts", NEW_PARTS)
 
 -- ===== UTILITY TAB =====
-UtilityTab:CreateSection("Tools")
+utilitySection:Header({ Name = "Tools" })
 
-UtilityTab:CreateButton({
+utilitySection:Button({
     Name = "Load Infinite Yield",
     Callback = loadInfiniteYield
 })
 
-UtilityTab:CreateButton({
+utilitySection:Button({
     Name = "Delete AntiCheat",
     Callback = deleteAntiCheat
 })
 
-UtilityTab:CreateButton({
+utilitySection:Button({
     Name = "No Fall Damage",
     Callback = noFallDamage
 })
@@ -1058,10 +1051,10 @@ UtilityTab:CreateButton({
 -- ============================================
 -- УВЕДОМЛЕНИЕ О ЗАГРУЗКЕ
 -- ============================================
-Rayfield:Notify({
+Window:Notify({
     Title = "Pantsir S1 Hub",
-    Content = "Загружен (Rayfield)",
-    Duration = 3
+    Description = "Загружен (MacLib)",
+    Lifetime = 3
 })
 
-print("Pantsir S1 Hub переписан под Rayfield.")
+print("Pantsir S1 Hub переписан под MacLib.")
