@@ -1,10 +1,15 @@
 -- ============================================
--- ЗАГРУЗКА БИБЛИОТЕКИ MACLIB
+-- ЗАГРУЗКА FLUENTUI
 -- ============================================
-local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
 
 -- ============================================
--- ОСНОВНАЯ ЛОГИКА (БЕЗ ИЗМЕНЕНИЙ)
+-- ОСНОВНАЯ ЛОГИКА
 -- ============================================
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -497,7 +502,7 @@ end
 local function teleportToCenter()
     local centerCF = CFrame.new(-504.47818, 178.98941, -1023.05316, 0.707134247, 0, -0.707079291, 0, -1, -0, -0.707079291, 0, -0.707134247)
     teleportTo(centerCF)
-    Window:Notify({ Title = "Teleport", Description = "Центр", Lifetime = 2 })
+    Fluent:Notify({ Title = "Teleport", Content = "Центр", Duration = 2 })
 end
 
 local function findAllDrones()
@@ -553,7 +558,7 @@ end
 local function checkRebirthsAndNotify()
     local rebirths = getRebirths()
     if rebirths < 8 then
-        Window:Notify({ Title = "Drones", Description = "Нужно 8+ перерождений. У вас: " .. rebirths, Lifetime = 4 })
+        Fluent:Notify({ Title = "Drones", Content = "Нужно 8+ перерождений. У вас: " .. rebirths, Duration = 4 })
         return false
     end
     return true
@@ -564,7 +569,7 @@ local function dronesLoop()
         if not checkRebirthsAndNotify() then
             state.autoDrones = false
             if autoDronesToggle then
-                autoDronesToggle:Set(false)
+                autoDronesToggle:SetValue(false)
             end
             break
         end
@@ -789,7 +794,7 @@ local NEW_PARTS = {
 
 local function loadInfiniteYield()
     loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
-    Window:Notify({ Title = "Infinite Yield", Description = "Загружен", Lifetime = 2 })
+    Fluent:Notify({ Title = "Infinite Yield", Content = "Загружен", Duration = 2 })
 end
 
 local function deleteAntiCheat()
@@ -806,7 +811,7 @@ local function deleteAntiCheat()
     del("Knit")
     del("OxygenService")
     del("InterfaceController")
-    Window:Notify({ Title = "AntiCheat", Description = "Удалено: " .. deleted, Lifetime = 2 })
+    Fluent:Notify({ Title = "AntiCheat", Content = "Удалено: " .. deleted, Duration = 2 })
 end
 
 local function noFallDamage()
@@ -821,204 +826,217 @@ local function noFallDamage()
     if char and char:FindFirstChild("Humanoid") then
         char.Humanoid.BreakJointsOnDeath = false
     end
-    Window:Notify({ Title = "No Fall", Description = "Готово", Lifetime = 2 })
+    Fluent:Notify({ Title = "No Fall", Content = "Готово", Duration = 2 })
 end
 
 -- ============================================
--- СОЗДАНИЕ GUI (MACLIB)
+-- СОЗДАНИЕ ОКНА FLUENTUI
 -- ============================================
-local Window = MacLib:Window({
+local Window = Fluent:CreateWindow({
     Title = "Pantsir S1 Hub",
-    Subtitle = "Full Version",
+    SubTitle = "Full Version",
+    TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
-    DragStyle = 1,
-    DisabledWindowControls = {},
-    ShowUserInfo = true,
-    Keybind = Enum.KeyCode.RightControl,
-    AcrylicBlur = true,
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
--- Группа вкладок
-local tabGroup = Window:TabGroup()
+-- Вкладки
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "sword" }),
+    Farm = Window:AddTab({ Title = "Farm", Icon = "tractor" }),
+    Parts = Window:AddTab({ Title = "Parts", Icon = "map-pin" }),
+    Utility = Window:AddTab({ Title = "Utility", Icon = "wrench" })
+}
 
--- Создаём вкладки
-local MainTab = tabGroup:Tab({ Name = "Main", Image = "rbxassetid://4483362458" })
-local FarmTab = tabGroup:Tab({ Name = "Farm", Image = "rbxassetid://4483362458" })
-local PartsTab = tabGroup:Tab({ Name = "Parts", Image = "rbxassetid://4483362458" })
-local UtilityTab = tabGroup:Tab({ Name = "Utility", Image = "rbxassetid://4483362458" })
+-- ============================================
+-- MAIN TAB
+-- ============================================
+Tabs.Main:AddSection("RPG")
 
--- Секции
-local mainSection = MainTab:Section({ Side = "Left" })
-local farmSection = FarmTab:Section({ Side = "Left" })
-local partsSection = PartsTab:Section({ Side = "Left" })
-local utilitySection = UtilityTab:Section({ Side = "Left" })
-
--- ===== MAIN TAB =====
-mainSection:Header({ Name = "RPG" })
-
-mainSection:Toggle({
-    Name = "Infinite Ammo (RPG)",
+Tabs.Main:AddToggle("InfiniteAmmoRPG", {
+    Title = "Infinite Ammo (RPG)",
+    Description = "Бесконечные патроны для RPG",
     Default = false,
     Callback = function(v)
         state.infiniteAmmoRPG = v
     end
-}, "InfiniteAmmoRPG")
+})
 
-mainSection:Toggle({
-    Name = "Attack Players",
+Tabs.Main:AddToggle("RPGPlayers", {
+    Title = "Attack Players",
+    Description = "Спам ракетами по игрокам",
     Default = false,
     Callback = function(v)
         state.attackPlayers = v
         manageThread("rpg", rpgLoop, v or state.attackShields)
     end
-}, "RPGPlayers")
+})
 
-mainSection:Toggle({
-    Name = "Attack Shields",
+Tabs.Main:AddToggle("RPGShields", {
+    Title = "Attack Shields",
+    Description = "Спам ракетами по щитам",
     Default = false,
     Callback = function(v)
         state.attackShields = v
         manageThread("rpg", rpgLoop, v or state.attackPlayers)
     end
-}, "RPGShields")
+})
 
-mainSection:Header({ Name = "Speed Hack" })
+Tabs.Main:AddSection("Speed Hack")
 
-mainSection:Toggle({
-    Name = "Enable Speed Hack",
+Tabs.Main:AddToggle("SpeedHackEnabled", {
+    Title = "Enable Speed Hack",
+    Description = "Включает увеличение скорости",
     Default = false,
     Callback = function(v)
         state.speedHackEnabled = v
         updateSpeed()
     end
-}, "SpeedHackEnabled")
+})
 
-mainSection:Slider({
-    Name = "Speed Value",
+Tabs.Main:AddSlider("SpeedHackSpeed", {
+    Title = "Speed Value",
+    Description = "Скорость бега",
     Default = 50,
-    Minimum = 16,
-    Maximum = 200,
-    DisplayMethod = "Value",
-    Precision = 0,
+    Min = 16,
+    Max = 200,
+    Rounding = 1,
     Callback = function(v)
         state.speedHackSpeed = v
         if state.speedHackEnabled then
             updateSpeed()
         end
     end
-}, "SpeedHackSpeed")
+})
 
-mainSection:Header({ Name = "Stinger" })
+Tabs.Main:AddSection("Stinger")
 
-mainSection:Toggle({
-    Name = "Stinger Spam",
+Tabs.Main:AddToggle("StingerSpam", {
+    Title = "Stinger Spam",
+    Description = "Спам ракетами Stinger",
     Default = false,
     Callback = function(v)
         state.stinger = v
         manageThread("stinger", stingerLoop, v)
     end
-}, "StingerSpam")
+})
 
-mainSection:Header({ Name = "Javelin" })
+Tabs.Main:AddSection("Javelin")
 
-mainSection:Toggle({
-    Name = "Javelin Spam",
+Tabs.Main:AddToggle("JavelinSpam", {
+    Title = "Javelin Spam",
+    Description = "Спам ракетами Javelin",
     Default = false,
     Callback = function(v)
         state.javelin = v
         manageThread("javelin", javelinLoop, v)
     end
-}, "JavelinSpam")
+})
 
-mainSection:Header({ Name = "Explosion Sniper" })
+Tabs.Main:AddSection("Explosion Sniper")
 
-mainSection:Toggle({
-    Name = "Explosion Sniper Spam",
+Tabs.Main:AddToggle("ExplosionSniper", {
+    Title = "Explosion Sniper Spam",
+    Description = "Спам из Explosion Sniper",
     Default = false,
     Callback = function(v)
         state.explosionSniper = v
         manageThread("explosionSniper", explosionSniperLoop, v)
     end
-}, "ExplosionSniper")
+})
 
-mainSection:Header({ Name = "Target All Base" })
+Tabs.Main:AddSection("Target All Base")
 
-mainSection:Toggle({
-    Name = "Target All Base",
+Tabs.Main:AddToggle("TargetAll", {
+    Title = "Target All Base",
+    Description = "Атака всех объектов базы",
     Default = false,
     Callback = function(v)
         state.targetAll = v
         manageThread("targetAll", targetAllLoop, v)
     end
-}, "TargetAll")
+})
 
--- ===== FARM TAB =====
-farmSection:Header({ Name = "Oil" })
+-- ============================================
+-- FARM TAB
+-- ============================================
+Tabs.Farm:AddSection("Oil")
 
-farmSection:Toggle({
-    Name = "Auto Oil (Loop)",
+Tabs.Farm:AddToggle("AutoOil", {
+    Title = "Auto Oil (Loop)",
+    Description = "Автоматический сбор нефти",
     Default = false,
     Callback = function(v)
         state.autoOil = v
         manageThread("oilLoop", oilLoop, v)
     end
-}, "AutoOil")
+})
 
-farmSection:Header({ Name = "Crates" })
+Tabs.Farm:AddSection("Crates")
 
-farmSection:Toggle({
-    Name = "Auto Crates (Loop)",
+Tabs.Farm:AddToggle("AutoCrates", {
+    Title = "Auto Crates (Loop)",
+    Description = "Автоматический сбор ящиков",
     Default = false,
     Callback = function(v)
         state.autoCrates = v
         manageThread("cratesLoop", cratesLoop, v)
     end
-}, "AutoCrates")
+})
 
-farmSection:Header({ Name = "Airdrop" })
+Tabs.Farm:AddSection("Airdrop")
 
-farmSection:Toggle({
-    Name = "Auto Airdrop (Loop + Reset)",
+Tabs.Farm:AddToggle("AutoAirdropReset", {
+    Title = "Auto Airdrop (Loop + Reset)",
+    Description = "Автоматический сбор аирдропов с респавном",
     Default = false,
     Callback = function(v)
         state.autoAirdrop = v
         manageThread("airdropLoop", airdropLoopWithReset, v)
     end
-}, "AutoAirdropReset")
+})
 
-farmSection:Header({ Name = "Drones" })
+Tabs.Farm:AddSection("Drones")
 
-autoDronesToggle = farmSection:Toggle({
-    Name = "Auto Drones (Loop)",
+autoDronesToggle = Tabs.Farm:AddToggle("AutoDrones", {
+    Title = "Auto Drones (Loop)",
+    Description = "Автоматический сбор дронов (требуется 8+ перерождений)",
     Default = false,
     Callback = function(v)
         state.autoDrones = v
         manageThread("dronesLoop", dronesLoop, v)
     end
-}, "AutoDrones")
+})
 
-farmSection:Header({ Name = "Auto Tycoon" })
+Tabs.Farm:AddSection("Auto Tycoon")
 
-farmSection:Toggle({
-    Name = "Auto Tycoon (Loop)",
+Tabs.Farm:AddToggle("AutoTycoon", {
+    Title = "Auto Tycoon (Loop)",
+    Description = "Автоматическая прокачка тикуна",
     Default = false,
     Callback = function(v)
         state.autoTycoon = v
         manageThread("tycoonLoop", tycoonLoop, v)
     end
-}, "AutoTycoon")
+})
 
-farmSection:Button({
-    Name = "Teleport Center",
+Tabs.Farm:AddButton({
+    Title = "Teleport Center",
+    Description = "Телепорт в центр карты",
     Callback = teleportToCenter
 })
 
--- ===== PARTS TAB =====
+-- ============================================
+-- PARTS TAB
+-- ============================================
 local function addPartSection(title, parts)
-    partsSection:Header({ Name = title })
+    Tabs.Parts:AddSection(title)
     for i, pos in ipairs(parts) do
-        partsSection:Button({
-            Name = "Часть " .. i,
+        Tabs.Parts:AddButton({
+            Title = "Часть " .. i,
+            Description = "Телепорт к части",
             Callback = function()
                 teleportTo(CFrame.new(pos))
             end
@@ -1030,31 +1048,48 @@ addPartSection("Pantsir S1", PANTSIR_PARTS)
 addPartSection("M1117", M1117_PARTS)
 addPartSection("New Parts", NEW_PARTS)
 
--- ===== UTILITY TAB =====
-utilitySection:Header({ Name = "Tools" })
+-- ============================================
+-- UTILITY TAB
+-- ============================================
+Tabs.Utility:AddSection("Tools")
 
-utilitySection:Button({
-    Name = "Load Infinite Yield",
+Tabs.Utility:AddButton({
+    Title = "Load Infinite Yield",
+    Description = "Загружает Infinite Yield",
     Callback = loadInfiniteYield
 })
 
-utilitySection:Button({
-    Name = "Delete AntiCheat",
+Tabs.Utility:AddButton({
+    Title = "Delete AntiCheat",
+    Description = "Удаляет объекты античита",
     Callback = deleteAntiCheat
 })
 
-utilitySection:Button({
-    Name = "No Fall Damage",
+Tabs.Utility:AddButton({
+    Title = "No Fall Damage",
+    Description = "Отключает урон от падения",
     Callback = noFallDamage
 })
 
 -- ============================================
+-- НАСТРОЙКА СОХРАНЕНИЙ (опционально)
+-- ============================================
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("PantsirS1Hub")
+SaveManager:SetFolder("PantsirS1Hub/settings")
+InterfaceManager:BuildInterfaceSection(Tabs.Utility) -- можно добавить вкладку настроек
+SaveManager:BuildConfigSection(Tabs.Utility)        -- можно добавить вкладку настроек
+
+Window:SelectTab(1)
+
+-- ============================================
 -- УВЕДОМЛЕНИЕ О ЗАГРУЗКЕ
 -- ============================================
-Window:Notify({
+Fluent:Notify({
     Title = "Pantsir S1 Hub",
-    Description = "Загружен (MacLib)",
-    Lifetime = 3
+    Content = "Загружен (FluentUI)",
+    Duration = 3
 })
 
-print("Pantsir S1 Hub переписан под MacLib.")
+print("Pantsir S1 Hub переписан под FluentUI.")
